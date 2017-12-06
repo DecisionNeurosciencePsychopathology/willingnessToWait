@@ -6,9 +6,6 @@
 %learning rule - modified RW with TD(lambda)-type credit assignment
 %choice rule: stochastic continuous RT weighted by value
 %calls on RewFunction.m (Frank lab code)
-
-%inputs
-%params = [alpha, lambda, epsilon]
 %distrib_num = 1 - uniform, 2 - gen. Pareto, 3 - early beta, 4 - late beta
 
 
@@ -20,9 +17,9 @@ number_of_stimuli = 12;
 trial_plots = 1;
 
 
-trial_length = 200; %200 100ms bins = 20s
+trial_length = 2000; %2000 10ms bins = 20s
 min_trials = 100; % how many trials the agent will sample if he always waits
-timeout = 20; % timeout after an immediate quit (2s - 20 10ms bins)
+timeout = 80; % timeout after an immediate quit
 task_length = min_trials*(trial_length+timeout);
 maxtrials = ceil(task_length./timeout);          %maximum number of trials in a run
 ntimesteps = trial_length; %number of timesteps in action space (set based on pseudorandom sampling of contingency above)
@@ -42,7 +39,6 @@ output_names = {'unif', 'gp', 'beta', 'late_beta', 'camel'};
 %distrib_num = 4; % 1 - uniform, 2 - gen. Pareto, 3 - early beta, 4 - late
 %beta, 5 - piecewise normal 
 
-%assign each based on which distribution
 cond = output_names{distrib_num};
 distrib_pars = pars{distrib_num};
 distrib = conds{distrib_num};
@@ -50,7 +46,7 @@ distrib = conds{distrib_num};
 
 constr = [];
 
-if strcmpi(cond, 'unif') %compare string (case insensitive)
+if strcmpi(cond, 'unif')
     reward_times = prr.unif*ntimesteps;
 %     ev_times = pev.unif*ntimesteps;
 elseif strcmpi(cond, 'gp')
@@ -98,7 +94,7 @@ wtw = zeros(1,maxtrials);
 %Have initial rts be constant
 %Willingness to wait (WTW) is the quit time, to which the model pre-commits
 %at the start of the trial
-%NB - times here are in 100ms (centisec) bins
+%NB - times here are in 10ms (centisec) bins
 %wtw(1) = ceil(.5*trial_length/10); <- trial_length/10 = deciseconds
 wtw(1) = ceil(.5*trial_length);
 
@@ -129,9 +125,7 @@ cumulative_reward_fx = zeros(trial_length,maxtrials)';
 return_on_policy = zeros(trial_length,maxtrials)';
 
 
-%TODO
 
-%%%%REPLACE WITH setup_rbf%%%%%%
 %contruct gaussian matrix
 gaussmat = zeros(nbasis,ntimesteps);
 
@@ -145,7 +139,7 @@ gauss_params = [1.135 .99 .99 1.135];
 corrective_basis = ones(1,ntimesteps);
 corrective_basis = [gauss_params(1:2) ones(1,number_of_stimuli-2)...
 gauss_params(3:4)]'*corrective_basis;
-%%%%%%%%%%%%%%%%
+
 
 %Set up to run multiple runs for multiple ntrials
 % for i = 1:ntrials
@@ -176,7 +170,7 @@ while task_time<task_length;
         sampling_h(i,1:idx) = max(eh(i,:)).*sampling_reward;
     end
     
-    rh(i,:) = rew(i); %document reward history
+    rh(i,:) = rew(i); 
     %rh(i,:) = disc_rew(i);
     
     %fprintf('i: %d, wtw(i): %.3f, reward_times(i): %.3f, task_time: %.3f\n', i, wtw(i), reward_times(i), task_time);
