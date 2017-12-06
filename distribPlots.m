@@ -160,7 +160,7 @@ col{3} = [0, 0.5, 0]; % beta condition: green
 for i = 1:length(fxNames)
     fname = fxNames{i};
     figure(i);
-    fprintf('figure %d: %s\n',gcf,fname);
+%    fprintf('figure %d: %s\n',gcf,fname);
     for d = 1:3
         subplot(1,3,d);
         h = plot(tGrid,fx(d).(fname));
@@ -189,7 +189,7 @@ col{1} = [0, 0, 0.5]; % unif condition: dark blue
 col{2} = [1, 0.1, 0.1]; % gp condition: light red 
 for i = 1:length(fxNames)
     fname = fxNames{i};
-    figure(gcf+1);
+    figure(i+1);
     clf;
     hold on;
     for d = 1:3
