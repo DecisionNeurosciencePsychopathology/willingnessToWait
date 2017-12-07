@@ -12,13 +12,16 @@
 %distrib_num = 1 - uniform, 2 - gen. Pareto, 3 - beta, 4 - discrete1
 
 function [cost,constr,v_func,value_hist, wtw, mov, ret] = wtw_prototype(params,distrib_num, agent, trial_length, min_trials, timeout, large_rew, small_rew,sampling_reward)
-if (~exist('prr', 'var')), load prr; end;
+if (~exist('prr', 'var')), load prr; end
 %if (~exist('pev', 'var')), load pev; end;
 
 number_of_stimuli = 12;
 trial_plots = 1;
 agent = 'fixedLR_softmax';
 beta=0.5; %Softmax temperture
+
+%Choice policy for model string can be null or empty
+choice_policy = 'e_greedy';
 
 if nargin < 4, trial_length = 200; end %200 100ms bins = 20s
 if nargin < 5, min_trials = 100; end % how many trials the agent will sample if he always waits
@@ -76,6 +79,7 @@ for i = 1 : maxtrials
 end
 
 %create histogram of the reward times
+figure(99)
 histogram(reward_times)
 
 
@@ -150,31 +154,8 @@ return_on_policy = zeros(trial_length,maxtrials)';
 % for i = 1:ntrials
 i=0;
 task_time = 0;
-while task_time<task_length;
+while task_time<task_length
     i=i+1; %while loop indexer starts at 0
-    
-    % get symmetric eligibility traces for each basis function (temporal generalization)
-    % generate a truncated Gaussian basis function centered at the RT and with sigma equal to the free parameter.
-    
-    %compute gaussian spread function with mu = rts(i) and sigma based on free param prop_spread
-    elig = gaussmf(tvec, [sig_spread, wtw(i)]);
-    
-    %compute sum of area under the curve of the gaussian function
-    auc=sum(elig);
-    
-    %divide gaussian update function by its sum so that AUC=1.0, then rescale to have AUC of a non-truncated basis
-    %this ensures that eligibility is 0-1.0 for non-truncated update function, and can exceed 1.0 at the edge.
-    %note: this leads to a truncated gaussian update function defined on the interval of interest because AUC
-    %will be 1.0 even for a partial Gaussian where part of the distribution falls outside of the interval.
-    elig=elig/auc*refspread;
-    
-    %truncated gaussian eligibility
-    %figure(7); plot(tvec, elig);
-    
-    %compute the intersection of the Gaussian spread function with the truncated Gaussian basis.
-    %this is essentially summing the area under the curve of each truncated RBF weighted by the truncated
-    %Gaussian spread function.
-    e_ij(i,:) = sum(repmat(elig,nbasis,1).*gaussmat_trunc, 2);
     
     %         disp(i)
     if wtw(i)> reward_times(i)
@@ -201,8 +182,32 @@ while task_time<task_length;
         update_time(i) = wtw(i);
     end
     
+    %% eligiblity trace
+    % get symmetric eligibility traces for each basis function (temporal generalization)
+    % generate a truncated Gaussian basis function centered at the RT and with sigma equal to the free parameter.
+    
+    %compute gaussian spread function with mu = rts(i) and sigma based on free param prop_spread
+    elig = gaussmf(tvec, [sig_spread, update_time(i)]);
+    
+    %compute sum of area under the curve of the gaussian function
+    auc=sum(elig);
+    
+    %divide gaussian update function by its sum so that AUC=1.0, then rescale to have AUC of a non-truncated basis
+    %this ensures that eligibility is 0-1.0 for non-truncated update function, and can exceed 1.0 at the edge.
+    %note: this leads to a truncated gaussian update function defined on the interval of interest because AUC
+    %will be 1.0 even for a partial Gaussian where part of the distribution falls outside of the interval.
+    elig=elig/auc*refspread;
+    
+    %truncated gaussian eligibility
+    %figure(7); plot(tvec, elig);
+    
+    %compute the intersection of the Gaussian spread function with the truncated Gaussian basis.
+    %this is essentially summing the area under the curve of each truncated RBF weighted by the truncated
+    %Gaussian spread function.
+    e_ij(i,:) = sum(repmat(elig,nbasis,1).*gaussmat_trunc, 2);
     
     
+    %% update value
     %1) compute prediction error, scaled by eligibility trace
     %this is the basis-wise update, which does not converge to underlying EV
     %delta_ij(i,:) = e_ij(i,:).*(rew_i(i) - mu_ij(i,:));
@@ -236,21 +241,22 @@ while task_time<task_length;
     v_final = v_func; % just use value curve for choice
     
     
-    softmax_seed=21; %hardcoded random number, used by softmax agent for weighted sampling of softmax function using randsample
-
-    
-    %setup random number generator for softmax function if relevant
-    if ismember(agent, {'fixedLR_softmax'})
-        %setup a random number stream to be used by the softmax choice rule to make choices consistent during optimization
-        softmax_stream = RandStream('mt19937ar','Seed',softmax_seed);
-    end
+%     softmax_seed=21; %hardcoded random number, used by softmax agent for weighted sampling of softmax function using randsample
+% 
+%     
+%     %setup random number generator for softmax function if relevant
+%     if ismember(agent, {'fixedLR_softmax'})
+%         %setup a random number stream to be used by the softmax choice rule to make choices consistent during optimization
+%         softmax_stream = RandStream('mt19937ar','Seed',softmax_seed);
+%     end
     
     
     if i == 1   %indexing contingency
         reward_rate(i) = 0;
     else
-        %update reward rate via delta rule
-        reward_rate(i) = reward_rate(i-1) + alpha*(rew_i(i)/reward_times(i) - reward_rate(i-1));
+        %update reward rate via delta rule TODO add time out to reward rate
+        %calc
+        reward_rate(i) = reward_rate(i-1) + alpha*(rew_i(i)/update_time(i) - reward_rate(i-1));
     end
     
     %Opportunity cost = reward rate per trial * trial length
@@ -281,6 +287,10 @@ while task_time<task_length;
         return_on_policy = (0)*ones(1,200);
     end
     
+
+    
+    %% choice rule
+    
     %compute choice rule according to agent
     %NB: all other models use a softmax choice rule over the v_final curve.
     %p_choice(i,:) = (exp((v_final-max(v_final))/beta)) / (sum(exp((v_final-max(v_final))/beta))); %Divide by temperature
@@ -290,11 +300,15 @@ while task_time<task_length;
 %     end
     %if (all(v_final==0)), v_final=rand(1, length(v_final)).*1e-6; end; %need small non-zero values to unstick softmax on first trial
     
-    %test null agent that chooses a time point randomly (uniformly distributed)
-    if strcmpi(agent,'null')
-        wtw(i+1)=randi([1,ntimesteps],1);
-    else
-        wtw(i+1) = randsample(softmax_stream, tvec, 1, true, p_choice(i,:));
+    
+    
+    % different exploration policies
+    if strcmpi(choice_policy,'null')
+        wtw(i+1) = null_policy(ntimesteps);
+    elseif strcmpi(choice_policy,'softmax')
+        wtw(i+1) = softmax_policy(tvec, p_choice(i,:));
+    elseif strcmpi(choice_policy,'e_greedy')
+        wtw(i+1) = e_greedy_policy(ntimesteps, return_on_policy(i,:));
     end
     
     %populate v_it for tracking final value function
@@ -379,7 +393,7 @@ while task_time<task_length;
         %% figures for the movie
         subplot(4,2,1:4)
         title('black: wtw blue: RT(reward) red: RT(quit)');  hold on; ...
-            plot(find(rew_i(1:maxtrials)==large_rew),reward_times(rew_i(1:maxtrials)==large_rew),'bo','LineWidth',2);
+            plot(find(rew_i(1:maxtrials)==large_rew),update_time(rew_i(1:maxtrials)==large_rew),'bo','LineWidth',2);
         plot(find(rew_i(1:maxtrials)==small_rew),wtw(rew_i(1:maxtrials)==small_rew),'ro','LineWidth',2); hold off;
         
         
