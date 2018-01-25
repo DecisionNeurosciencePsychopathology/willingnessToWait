@@ -10,7 +10,7 @@ if num < epsilon
     wtw  = randi([1,ntimesteps],1); %pick random time point
 else
     [val, indx] = max(return_on_policy);
-    wtw = indx;%pick best opinion
+    wtw = indx; %pick best opinion
 end
 
 end

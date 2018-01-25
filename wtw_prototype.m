@@ -8,8 +8,9 @@
 %calls on RewFunction.m (Frank lab code)
 
 %inputs
-%params = [alpha, lambda, epsilon]
+%params = [alpha, lambda, gamma]
 %distrib_num = 1 - uniform, 2 - gen. Pareto, 3 - beta, 4 - discrete1
+%agent = null, softmax, e_greedy, uncertainty, logistic
 
 function [cost,constr,v_func,value_hist, wtw, mov, ret] = wtw_prototype(params,distrib_num, agent, trial_length, min_trials, timeout, large_rew, small_rew,sampling_reward)
 if (~exist('prr', 'var')), load prr; end
@@ -17,11 +18,10 @@ if (~exist('prr', 'var')), load prr; end
 
 number_of_stimuli = 12;
 trial_plots = 1;
-agent = 'fixedLR_softmax';
+%agent = 'fixedLR_softmax';
 beta=0.5; %Softmax temperture
 
-%Choice policy for model string can be null or empty
-choice_policy = 'e_greedy';
+
 
 if nargin < 4, trial_length = 200; end %200 100ms bins = 20s
 if nargin < 5, min_trials = 100; end % how many trials the agent will sample if he always waits
@@ -43,7 +43,7 @@ mov=repmat(struct('cdata', [], 'colormap', []), maxtrials,1);
 
 %%
 pars = {{0, 1},{.4, .575, 0},{0.25, 0.25}, {5, 1}, {maxtrials,300}};
-conds = {'unif', 'gp', 'beta', 'beta', 'discrete1'};
+conds = {'unif', 'gp', 'beta','discrete uniform'};
 output_names = {'unif', 'gp', 'beta', 'discrete1', 'camel'};
 %distrib_num = 4; % 1 - uniform, 2 - gen. Pareto, 3 - early beta, 4 - late
 %beta, 5 - piecewise normal
@@ -52,6 +52,10 @@ output_names = {'unif', 'gp', 'beta', 'discrete1', 'camel'};
 cond = output_names{distrib_num};
 distrib_pars = pars{distrib_num};
 distrib = conds{distrib_num};
+
+%set up seed
+softmax_seed=21; %hardcoded
+softmax_stream = RandStream('mt19937ar','Seed',softmax_seed);
 
 
 constr = [];
@@ -78,9 +82,9 @@ for i = 1 : maxtrials
    reward_times(i) =  drawSample(cond,[])*10; %multiply by 10 to convert to ms
 end
 
-%create histogram of the reward times
-figure(99)
-histogram(reward_times)
+% %create histogram of the reward times
+% figure(99)
+% histogram(reward_times)
 
 
 %--program start
@@ -150,6 +154,33 @@ opportunity_cost = zeros(trial_length,maxtrials)';
 cumulative_reward_fx = zeros(trial_length,maxtrials)';
 return_on_policy = zeros(trial_length,maxtrials)';
 
+
+
+    %%%%%%%%%% uncertainty driven %%%%%%%%%%%%%
+if strcmpi(agent, 'logistic') || strcmpi(agent, 'uncertainty')
+        %assign reward
+        switch distrib
+            case 'gp'
+            case 'unif'
+            case 'beta'
+            case 'discrete uniform'        
+                %assign reward at all times as 1
+                reward = ones(1,200);
+                %assign 10, 20, 30, 200 sec as a reward of 10
+                reward(10) = 10; 
+                reward(20) = 10;
+                reward(30) = 10;
+                reward(200) = 10;    
+        end
+
+        sigma_noise = repmat(std(reward)^2, 1, nbasis);
+
+        %As in Frank, initialize estimate of std of each Gaussian to the noise of returns on a sample of the whole contingency.
+        %This leads to an effective learning rate of 0.5 since k = sigma_ij / sigma_ij + sigma_noise
+        sigma_ij(1,:) = sigma_noise;
+    
+end
+
 %Set up to run multiple runs for multiple ntrials
 % for i = 1:ntrials
 i=0;
@@ -218,9 +249,19 @@ while task_time<task_length
     %distribute estimated value at RT according to eligibility (works correctly)
     delta_ij(i,:) = e_ij(i,:).*(rew_i(i) - curv);
     
+    
     %Variants of learning rule
-    if ismember(agent, {'fixedLR_softmax'})
+    if ismember(agent, {'softmax','e_greedy'})
       mu_ij(i+1,:) = mu_ij(i,:) + alpha.*delta_ij(i,:);
+         % update mu for uncertainty
+    else %this is for uncertainty
+        %Kalman gain
+        Q_ij(i,:)=0; %for now may remove in future
+        k_ij(i,:) = (sigma_ij(i,:) + Q_ij(i,:))./(sigma_ij(i,:) + Q_ij(i,:) + sigma_noise); 
+
+        % update mu for uncertainty
+        mu_ij(i+1,:) = mu_ij(i,:) + k_ij(i,:).*delta_ij(i,:);
+        
     end
     
     %compute summed/evaluated value function across all timesteps
@@ -232,13 +273,77 @@ while task_time<task_length
     %if i == ntrials, break; end %do not compute i+1 choice on the final trial (invalid indexing problem)
     
     rh(i,:) = rew_i(i); %document reward history
-        
-    %% CHOICE RULE
+    
     % find the RT corresponding to exploitative choice (choose randomly if value unknown)
     % NB: we added just a little bit of noise
     
     %compute final value function to use for choice
     v_final = v_func; % just use value curve for choice
+    
+    
+%     %%%%%%%%%% uncertainty driven %%%%%%%%%%%%%
+   
+    %     %include Q???
+    %     Q_ij(i+1,:) = p.omega.*abs(delta_ij(i,:)); %use abs of PE so that any large surprise enhances effective gain.
+    %     %Compute the Kalman gains for the current trial (potentially adding process noise)
+
+if strcmpi(agent, 'logistic') || strcmpi(agent, 'uncertainty')
+        
+        %Update posterior variances on the basis of Kalman gains
+        sigma_ij(i+1,:) = (1 - e_ij(i,:).*k_ij(i,:)).*(sigma_ij(i,:));
+
+        %Uncertainty is a function of Kalman uncertainties.
+        u_jt=sigma_ij(i+1,:)'*ones(1,ntimesteps) .* gaussmat;  
+        u_func = sum(u_jt); %vector of uncertainties by timestep
+
+
+        p.beta = params(2);
+        p.tau  = .0001; % tau from Greek ???? -- value, price, cf ???? as trophys in Homer
+end
+
+    if strcmpi(agent,'uncertainty')   
+        uv_func=p.tau*v_func + (1-p.tau)*u_func; %mix together value and uncertainty according to tau
+        v_final = uv_func;
+        uv_it(i+1,:) = uv_func;
+        
+    end 
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    
+    if strcmpi(agent, 'logistic')
+        %compared to other models that use a curve over which to choose (either by softmax or egreedy selection),
+        %kalman_uv_logistic computes explore and exploit choices and chooses according to a logistic.
+        u = sum(u_func)/length(u_func);
+
+        if u == 0
+            rt_explore = ceil(.5*ntimesteps);
+        else
+            rt_explore = find(u_func==max(u_func), 1); %return position of first max (and add gaussian noise?)
+        end
+
+        %what do to about p.discrim and u_threshold??
+        p.discrim=0;
+        u_threshold=0;
+        sigmoid = 1/(1+exp(-p.discrim.*(u - u_threshold))); %Rasch model with tradeoff as difficulty (location) parameter
+        
+        choice_rand=rand(ntimesteps,1);
+        
+        %compute hard max of value function alone 
+        if i == 1
+                rt_exploit = ceil(.5*ntimesteps); %default to mid-point of time domain
+        else
+            rt_exploit = find(v_func==max(v_func), 1); %only take the first max if there are two identical peaks.
+            if rt_exploit > max(tvec), rt_exploit = max(tvec); end
+        end
+        
+        if choice_rand(i) < sigmoid
+            %explore according to hardmax u
+            wtw(i+1) = rt_explore;
+        else
+            wtw(i+1) = rt_exploit;
+        end
+        
+        v_final = v_func; %no alterations of value function for logistic
+    end
     
     
 %     softmax_seed=21; %hardcoded random number, used by softmax agent for weighted sampling of softmax function using randsample
@@ -303,12 +408,13 @@ while task_time<task_length
     
     
     % different exploration policies
-    if strcmpi(choice_policy,'null')
+    if strcmpi(agent,'null')
         wtw(i+1) = null_policy(ntimesteps);
-    elseif strcmpi(choice_policy,'softmax')
-        wtw(i+1) = softmax_policy(tvec, p_choice(i,:));
-    elseif strcmpi(choice_policy,'e_greedy')
+    elseif strcmpi(agent,'e_greedy')
         wtw(i+1) = e_greedy_policy(ntimesteps, return_on_policy(i,:));
+    elseif strcmpi(agent, 'softmax') || strcmpi(agent, 'uncertainty')
+        %wtw(i+1) = softmax_policy(tvec, p_choice(i,:));
+        wtw(i+1) = randsample(softmax_stream, tvec, 1, true, p_choice(i,:));
     end
     
     %populate v_it for tracking final value function
@@ -396,6 +502,7 @@ while task_time<task_length
             plot(find(rew_i(1:maxtrials)==large_rew),update_time(rew_i(1:maxtrials)==large_rew),'bo','LineWidth',2);
         plot(find(rew_i(1:maxtrials)==small_rew),wtw(rew_i(1:maxtrials)==small_rew),'ro','LineWidth',2); hold off;
         
+        axis([1 150 1 200])
         
         subplot(4,2,5)
         plot(t,v_func);
@@ -435,6 +542,16 @@ while task_time<task_length
 %         
         drawnow update;
         mov(i)=getframe(gcf);
+        
+        if strcmpi(agent, 'logistic') || strcmpi(agent, 'uncertainty')
+        %% movie 3
+        figure(3)
+        plot(1:200, u_func, 1:200, v_func)
+        legend('u_func','v_func')
+        
+        drawnow update;
+        mov(i)=getframe(gcf);
+        end
     end
     %     disp([i rts(i) rew(i) sum(value_all)])
 end
