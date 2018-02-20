@@ -5,7 +5,7 @@ function [cost,v_it,rts,ret] = clock_sceptic_agent(params, agent, rngseeds, cond
 %
 % cond is the character string or structure of the reward contingency
 % ntrials is the number of trials to run
-% nbasis is the number of radial basis functions used to estimate value and uncertainty
+% nbasis is the number of radial basis functions used to estimate value and 
 % ntimesteps is the number of time bins used for obtaining estimates of time functions for plotting etc.
 %
 % Agents:

@@ -298,8 +298,15 @@ while task_time<task_length
 
 if strcmpi(agent, 'logistic') || strcmpi(agent, 'uncertainty')
         
+        %update the elig trace for uncertainty models to encapsulate the
+        %max value from all previous time steps to the current time bin (i)
+        u_eij = e_ij(i,:);
+        max_idx = find(max(u_eij) == u_eij);
+        u_eij(1:max_idx(end)) = max(u_eij);
+    
+    
         %Update posterior variances on the basis of Kalman gains
-        sigma_ij(i+1,:) = (1 - e_ij(i,:).*k_ij(i,:)).*(sigma_ij(i,:));
+        sigma_ij(i+1,:) = (1 - u_eij.*k_ij(i,:)).*(sigma_ij(i,:));
 
         %Uncertainty is a function of Kalman uncertainties.
         u_jt=sigma_ij(i+1,:)'*ones(1,ntimesteps) .* gaussmat;  
@@ -404,136 +411,136 @@ end
     end
     
     
-    %Oppertunity cost code integrate after initial proto is up and running 
-% %     % 10/27/14 Updated choice Rule intergration/analytical method
-% %     if i == 1   %indexing contingency
-% %         reward_rate(i) = 0;
-% %     else
-% %         %update reward rate via delta rule
-% %         reward_rate(i) = reward_rate(i-1) + alpha*(rew_i(i)/reward_times(i) - reward_rate(i-1));
-% %     end
-% %     
-% %     %Opportunity cost = reward rate per trial * trial length
-% %     opportunity_cost(i,:) = reward_rate(i).*(1:trial_length);
-% %     cumulative_reward_fx(i,:) = cumtrapz(1:trial_length, value_all);
-% %     
-% %     
-% %     return_on_policy(i,:) = cumulative_reward_fx(i,:)./opportunity_cost(i,:);
-% %     
-% %     if sum(value_all) == 0 || any(return_on_policy(i,:)==inf)
-% %         %rt_exploit = ceil(rand(1)*ntrials); %random number within space
-% %         rt_exploit = ceil(.5*trial_length); %default to mid-point of time domain
-% %     else
-% %         %rt_exploit = max(round(find(value_all==max(value_all))));
-% %         rt_exploit = find(return_on_policy(i,:)==max(return_on_policy(i,:)));
-% %         if rt_exploit > trial_length
-% %             rt_exploit = trial_length;
-% %             
-% %         elseif rt_exploit < 0 %changed from if to elseif
-% %             rt_exploit = 0;
-% %         end
-% %     end
-% %     
-% %   
-% %     % find the RT corresponding to uncertainty-driven exploration (try random exploration if uncertainty is uniform)
-% %     
-% %     % u -- total amount of uncertainty on this trial (starts at 0 and decreases)
-% %     u = mean(u_all);
-% %     if u == 0
-% %         rt_explore = ceil(.5*trial_length); %Changed!!! from 5000 previously
-% %         
-% %     else
-% %         rt_explore = max(round(find(u_all(1:trial_length)==max(u_all))));
-% %         
-% %     end
-% %     
-% %     
-% %     discrim = 100; %need to increase steepness of logistic given the tiny values we have here. Could free later
-% %     sigmoid = 1/(1+exp(-discrim*(u - epsilon))); %Rasch model with epsilon as difficulty (location) parameter
-% %     
-% %     %hard classification of exploration for now at 0.5
-% %     if i < maxtrials %do not populate rt on final trial
-% %         if sigmoid > 0.5
-% %             wtw(i+1) = rt_explore;
-% %         else
-% %             wtw(i+1) = rt_exploit;
-% %         end
-% %     end
+%    Oppertunity cost code integrate after initial proto is up and running 
+%     % 10/27/14 Updated choice Rule intergration/analytical method
+%     if i == 1   %indexing contingency
+%         reward_rate(i) = 0;
+%     else
+%         %update reward rate via delta rule
+%         reward_rate(i) = reward_rate(i-1) + alpha*(rew_i(i)/reward_times(i) - reward_rate(i-1));
+%     end
+%     
+%     %Opportunity cost = reward rate per trial * trial length
+%     opportunity_cost(i,:) = reward_rate(i).*(1:trial_length);
+%     cumulative_reward_fx(i,:) = cumtrapz(1:trial_length, value_all);
+%     
+%     
+%     return_on_policy(i,:) = cumulative_reward_fx(i,:)./opportunity_cost(i,:);
+%     
+%     if sum(value_all) == 0 || any(return_on_policy(i,:)==inf)
+%         %rt_exploit = ceil(rand(1)*ntrials); %random number within space
+%         rt_exploit = ceil(.5*trial_length); %default to mid-point of time domain
+%     else
+%         %rt_exploit = max(round(find(value_all==max(value_all))));
+%         rt_exploit = find(return_on_policy(i,:)==max(return_on_policy(i,:)));
+%         if rt_exploit > trial_length
+%             rt_exploit = trial_length;
+%             
+%         elseif rt_exploit < 0 %changed from if to elseif
+%             rt_exploit = 0;
+%         end
+%     end
+%     
+%   
+%     % find the RT corresponding to uncertainty-driven exploration (try random exploration if uncertainty is uniform)
+%     
+%     % u -- total amount of uncertainty on this trial (starts at 0 and decreases)
+%     u = mean(u_all);
+%     if u == 0
+%         rt_explore = ceil(.5*trial_length); %Changed!!! from 5000 previously
+%         
+%     else
+%         rt_explore = max(round(find(u_all(1:trial_length)==max(u_all))));
+%         
+%     end
+%     
+%     
+%     discrim = 100; %need to increase steepness of logistic given the tiny values we have here. Could free later
+%     sigmoid = 1/(1+exp(-discrim*(u - epsilon))); %Rasch model with epsilon as difficulty (location) parameter
+%     
+%     %hard classification of exploration for now at 0.5
+%     if i < maxtrials %do not populate rt on final trial
+%         if sigmoid > 0.5
+%             wtw(i+1) = rt_explore;
+%         else
+%             wtw(i+1) = rt_exploit;
+%         end
+%     end
 
-    %% Compute the expected value of choice for the cost function
+    % Compute the expected value of choice for the cost function
     if ~strcmpi(cond, 'camel')
         ev(i+1) = cdf(distrib, wtw(i+1)./trial_length, distrib_pars{:});
     else
         ev(i+1) = cdf(distrib, wtw(i+1)./trial_length);
     end
     
-%     if trial_plots == 1
-%         figure(1); %clf;
-%         
-%         %% figures for the movie
-%         
-%         
-%         subplot(4,2,1:4)
-%         title('black: wtw blue: RT(reward) red: RT(quit)');  hold on; ...
-%             plot(find(rew_i(1:maxtrials)==large_rew),update_time(rew_i(1:maxtrials)==large_rew),'bo','LineWidth',2);
-%         plot(find(rew_i(1:maxtrials)==small_rew),wtw(rew_i(1:maxtrials)==small_rew),'ro','LineWidth',2); hold on;
-% %         plot(1:i,shape(
-% % 1:i),'k','LineWidth',2)        
-% %         axis([1 150 1 200])
-%         
-%         subplot(4,2,5)
-%         plot(t,v_func);
-%         ylabel('value')
-%         subplot(4,2,6)
-%         %barh(sigmoid); axis([-.1 1.1 0 2]);
-%         plot(t(1:ntimesteps),v_jt);
-%         hold on
-%         plot(update_time(i),mean(v_jt),'r*')
-%         ylabel('value temporal basis')
-%         hold off
-%         %title(sprintf('trial # = %i', h)); %
-%         %         xlabel('time(ms)')
-%         %         ylabel('reward value')
-%         
-%         subplot(4,2,7)
-%         plot(cumulative_reward_fx(i,:));
-%         ylabel('cumlulative reward function')
-%         
-%         subplot(4,2,8)
-%         plot(return_on_policy(i,:));
-%         ylabel('return on policy')
-%         
-%         drawnow update;
-%         mov(i) = getframe(gcf);
-%         
-%         
-%         
-%         %% movie 2
-%         figure(2)
-%         plot(1:200,cumulative_reward_fx(i,:),1:200,return_on_policy(i,:),1:200, v_final,1:200,(gamma*opportunity_cost(i,:)),'LineWidth',2.5)
-%         legend('cdf','return on policy','v_final','gamma*OC')
-%         %         plot(cumulative_reward_fx(i,:),'r','LineWidth',2); hold on;
-% %         plot(return_on_policy(i,:),'b','LineWidth',2); hold on;
-% %         plot(opportunity_cost(i,:),'g','LineWidth',2); hold on;
-% %         plot(v_final,'m','LineWidth',2);
-% %         
-%         drawnow update;
-%         mov(i)=getframe(gcf);
-%         
-% %         if strcmpi(agent, 'logistic') || strcmpi(agent, 'uncertainty')
-% %         %% movie 3
-% %         figure(3)
-% %         plot(1:i,sigmoid(1:i), 'rv', 1:i, choice_rand(1:i), 'bo','LineWidth',2)
-%         
-%         
-%         figure(4)
-%         plot(wtw(1:i),'o-','LineWidth',2)
+    if trial_plots == 1
+        figure(1); %clf;
+        
+        %% figures for the movie
+        
+        
+        subplot(4,2,1:4)
+        title('black: wtw blue: RT(reward) red: RT(quit)');  hold on; ...
+            plot(find(rew_i(1:maxtrials)==large_rew),update_time(rew_i(1:maxtrials)==large_rew),'bo','LineWidth',2);
+        plot(find(rew_i(1:maxtrials)==small_rew),wtw(rew_i(1:maxtrials)==small_rew),'ro','LineWidth',2); hold on;
+%         plot(1:i,shape(
+% 1:i),'k','LineWidth',2)        
 %         axis([1 150 1 200])
-%         drawnow update;
-%         mov(i)=getframe(gcf);
-% %         end
-%     end
-%         %disp([i rts(i) rew(i) sum(value_all)])
+        
+        subplot(4,2,5)
+        plot(t,v_func);
+        ylabel('value')
+        subplot(4,2,6)
+        %barh(sigmoid); axis([-.1 1.1 0 2]);
+        plot(t(1:ntimesteps),v_jt);
+        hold on
+        plot(update_time(i),mean(v_jt),'r*')
+        ylabel('value temporal basis')
+        hold off
+        %title(sprintf('trial # = %i', h)); %
+        %         xlabel('time(ms)')
+        %         ylabel('reward value')
+        
+        subplot(4,2,7)
+        plot(cumulative_reward_fx(i,:));
+        ylabel('cumlulative reward function')
+        
+        subplot(4,2,8)
+        plot(return_on_policy(i,:));
+        ylabel('return on policy')
+        
+        drawnow update;
+        mov(i) = getframe(gcf);
+        
+        
+        
+        %% movie 2
+        figure(2)
+        plot(1:200,cumulative_reward_fx(i,:),1:200,return_on_policy(i,:),1:200, v_final,1:200,(gamma*opportunity_cost(i,:)),'LineWidth',2.5)
+        legend('cdf','return on policy','v_final','gamma*OC')
+        %         plot(cumulative_reward_fx(i,:),'r','LineWidth',2); hold on;
+%         plot(return_on_policy(i,:),'b','LineWidth',2); hold on;
+%         plot(opportunity_cost(i,:),'g','LineWidth',2); hold on;
+%         plot(v_final,'m','LineWidth',2);
+%         
+        drawnow update;
+        mov(i)=getframe(gcf);
+        
+%         if strcmpi(agent, 'logistic') || strcmpi(agent, 'uncertainty')
+%         %% movie 3
+%         figure(3)
+%         plot(1:i,sigmoid(1:i), 'rv', 1:i, choice_rand(1:i), 'bo','LineWidth',2)
+        
+        
+        figure(4)
+        plot(wtw(1:i),'o-','LineWidth',2)
+        axis([1 150 1 200])
+        drawnow update;
+        mov(i)=getframe(gcf);
+%         end
+    end
+        %disp([i rts(i) rew(i) sum(value_all)])
 end
 
 %Cost function
