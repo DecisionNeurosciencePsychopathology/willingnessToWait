@@ -2,7 +2,7 @@
 
 function wtw = e_greedy_policy(ntimesteps, return_on_policy)
 
-epsilon = 0.5; %hardcoded
+epsilon = 0.1; %hardcoded
 
 num=rand; %random number between 0 and 1
 

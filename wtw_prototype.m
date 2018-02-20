@@ -13,13 +13,14 @@
 %agent = null, softmax, e_greedy, uncertainty, logistic
 
 function [cost,constr,v_func,value_hist, wtw, mov, ret] = wtw_prototype(params,distrib_num, agent, trial_length, min_trials, timeout, large_rew, small_rew,sampling_reward)
+close all;
 if (~exist('prr', 'var')), load prr; end
 %if (~exist('pev', 'var')), load pev; end;
 
 number_of_stimuli = 12;
 trial_plots = 1;
 %agent = 'fixedLR_softmax';
-beta=0.5; %Softmax temperture
+beta=params(2); %Softmax temperture
 
 %Set pseudo seed for now!
 rng(66)
@@ -287,8 +288,8 @@ while task_time<task_length
     % NB: we added just a little bit of noise
     
     %compute final value function to use for choice
-    v_final = v_func; % just use value curve for choice
-    
+    v_func_cum = cumsum(v_func); % just use value curve for choice
+    v_final = v_func_cum;
     
 %     %%%%%%%%%% uncertainty driven %%%%%%%%%%%%%
    
@@ -310,7 +311,7 @@ if strcmpi(agent, 'logistic') || strcmpi(agent, 'uncertainty')
 
         %Uncertainty is a function of Kalman uncertainties.
         u_jt=sigma_ij(i+1,:)'*ones(1,ntimesteps) .* gaussmat;  
-        u_func = sum(u_jt); %vector of uncertainties by timestep
+        u_func = cumsum(sum(u_jt)); %vector of uncertainties by timestep
 
 
         p.beta = params(2);
@@ -318,7 +319,7 @@ if strcmpi(agent, 'logistic') || strcmpi(agent, 'uncertainty')
 end
 
     if strcmpi(agent,'uncertainty')   
-        uv_func=p.tau*v_func + (1-p.tau)*u_func; %mix together value and uncertainty according to tau
+        uv_func=p.tau*v_func_cum + (1-p.tau)*u_func; %mix together value and uncertainty according to tau
         v_final = uv_func;
         uv_it(i+1,:) = uv_func;
         
