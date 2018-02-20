@@ -18,10 +18,10 @@ close all
 %% uncertainty aversion for UV_sum
 if nargin<9
     u_aversion = 0;
-    saveresults = 1;
+    saveresults = 0; %change later
     graphics = 0;
 elseif nargin<10
-    saveresults = 1;
+    saveresults = 0; %change later
     graphics = 0;
 elseif nargin<11
     graphics = 0;
@@ -36,7 +36,7 @@ options.inG.autocorrelation = 'none';
 options.plotKernals = 0;
 
 if ~graphics
-    options.DisplayWin = 0;
+    options.DisplayWin = 1;
 end
 %% set up dim defaults
 n_theta = 1;
@@ -53,9 +53,9 @@ results_dir = 'E:\data\sceptic\wtw\';
 
 
 options.inF.fit_nbasis = 0;
-range_RT = 2000; %The max time until a reward is gaurenteed to trigger
+range_RT = 200; %The max time until new trial is 20 seconds
 n_t = size(~isnan([data.latency]),2);
-iti=20;
+iti=20; %2 second inter-trial interval
 n_runs = n_t/50;
 trialsToFit = 1:n_t;
 % fit_propspread = 1;
@@ -98,7 +98,7 @@ options.inF.kalman.kalman_sigmavolatility_precision=0;
 rng(rew_rng_seed); %inside trial loop, use random number generator to draw probabilistic outcomes using RewFunction
 rew_rng_state=rng;
 
-%From evalDisctrete we get te hiRes ploicy payoff for quitting at time t in
+%From evalDisctrete we get te hiRes policy payoff for quitting at time t in
 %.01 bins. We'll use this as the variance of returns from typical runs for
 %the Kalman gain.
 load('policyPay_hiRes.mat')
@@ -281,7 +281,7 @@ options.inG.kalman = options.inF.kalman;
 
 
 if multinomial
-    rtrnd = round([data.latency]'*100*(n_steps-iti)/range_RT)' + iti; %Add in ITI of 2 seconds
+    rtrnd = round([data.latency]'*(n_steps-iti)/range_RT)' + iti; %Add in ITI of 2 seconds
     rtrnd(rtrnd==0)=1;
     %rtrnd(rtrnd>200)=200;
     max_rt = max(rtrnd);
@@ -297,75 +297,75 @@ if multinomial
     %For debug purposes save a pre-transformed rtrnd
     pre_trsnaformed_rtrnd = rtrnd;
     
-    %Need to determine if they would have waited longer than the actual quit.
-    for i = 1:length(trialsToFit)
-        if strcmp(win_or_quit{i},'quit')
-            y(rtrnd(i), i) = 1;
-            win_or_quit_idx(i)=false;
-        else
-            win_or_quit_idx(i)=true;
-            %Get current wait
-            current_wait = rtrnd(i);
-            current_wait_trial=i;
-            
-            %Initalize last longest wait
-            if ~exist('last_longest_wait','var')
-                last_longest_wait = current_wait;
-                last_wait_trial = i;
-            end
-            
-            
-            ct=1;
-            if current_wait > last_longest_wait
-                last_longest_wait = current_wait;
-            else
-                while last_wait_trial<current_wait_trial
-                    if current_wait<rtrnd(current_wait_trial-ct)
-                        last_longest_wait = rtrnd(current_wait_trial-ct);
-                        break
-                    end
-                    if ct>0
-                        last_wait_trial = last_wait_trial + 1; %update while loop
-                    end
-                    ct=ct+1; %Update counter
-                end
-            end
-            
-            
-            %Update last longest wait accordingly
-%             if current_wait>=last_longest_wait 
+%     %Need to determine if they would have waited longer than the actual quit.
+%     for i = 1:length(trialsToFit)
+%         if strcmp(win_or_quit{i},'quit')
+%             y(rtrnd(i), i) = 1;
+%             win_or_quit_idx(i)=false;
+%         else
+%             win_or_quit_idx(i)=true;
+%             %Get current wait
+%             current_wait = rtrnd(i);
+%             current_wait_trial=i;
+%             
+%             %Initalize last longest wait
+%             if ~exist('last_longest_wait','var')
+%                 last_longest_wait = current_wait;
+%                 last_wait_trial = i;
+%             end
+%             
+%             
+%             ct=1;
+%             if current_wait > last_longest_wait
 %                 last_longest_wait = current_wait;
 %             else
-%                 ct=1;
 %                 while last_wait_trial<current_wait_trial
 %                     if current_wait<rtrnd(current_wait_trial-ct)
 %                         last_longest_wait = rtrnd(current_wait_trial-ct);
 %                         break
 %                     end
-%                     last_wait_trial = last_wait_trial + 1; %update while loop
+%                     if ct>0
+%                         last_wait_trial = last_wait_trial + 1; %update while loop
+%                     end
 %                     ct=ct+1; %Update counter
 %                 end
 %             end
-            
-            %Update the last waited trial
-            last_wait_trial = current_wait_trial;
-            
-            %Update waits and rtrnd
-            rtrnd(i) = last_longest_wait;
-            y(rtrnd(i), i) = 1;
-            
-            
-%              if rtrnd(i)==max_rt
-%                  y(rtrnd(i), i) = 1;
-%              else
-%                  
-%              end
-            %Would they have waited longer? 
-            %y(rtrnd(i), i) = 1;
-%             y(rtrnd(i), i) = 0;
-%             skip_mat(rtrnd(i), i) = nan;
-         end
-    end
+%             
+%             
+%             %Update last longest wait accordingly
+% %             if current_wait>=last_longest_wait 
+% %                 last_longest_wait = current_wait;
+% %             else
+% %                 ct=1;
+% %                 while last_wait_trial<current_wait_trial
+% %                     if current_wait<rtrnd(current_wait_trial-ct)
+% %                         last_longest_wait = rtrnd(current_wait_trial-ct);
+% %                         break
+% %                     end
+% %                     last_wait_trial = last_wait_trial + 1; %update while loop
+% %                     ct=ct+1; %Update counter
+% %                 end
+% %             end
+%             
+%             %Update the last waited trial
+%             last_wait_trial = current_wait_trial;
+%             
+%             %Update waits and rtrnd
+%             rtrnd(i) = last_longest_wait;
+%             y(rtrnd(i), i) = 1;
+%             
+%             
+% %              if rtrnd(i)==max_rt
+% %                  y(rtrnd(i), i) = 1;
+% %              else
+% %                  
+% %              end
+%             %Would they have waited longer? 
+%             %y(rtrnd(i), i) = 1;
+% %             y(rtrnd(i), i) = 0;
+% %             skip_mat(rtrnd(i), i) = nan;
+%          end
+%     end
     priors.a_alpha = Inf;   % infinite precision prior
     priors.b_alpha = 0;
     priors.a_sigma = 1;     % Jeffrey's prior
@@ -375,7 +375,7 @@ if multinomial
     priors.SigmaPhi = 1e1*eye(dim.n_phi);
     % Inputs
     time  = [data.initialTime];
-    u = [([data.latency]'*100*(n_steps-iti)/range_RT+iti)'; [data.payoff]; time(trialsToFit); rtrnd]; %Add in ITI time
+    u = [([data.latency]'*(n_steps-iti)/range_RT+iti)'; [data.payoff]; time(trialsToFit); rtrnd]; %Add in ITI time
     u = [zeros(size(u,1),1) u(:,1:end-1)];
     % Observation function
     switch model

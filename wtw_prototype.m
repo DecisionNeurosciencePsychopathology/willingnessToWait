@@ -8,7 +8,7 @@
 %calls on RewFunction.m (Frank lab code)
 
 %inputs
-%params = [alpha, lambda, gamma]
+%params = [alpha, beta, gamma, tau]
 %distrib_num = 1 - uniform, 2 - gen. Pareto, 3 - beta, 4 - discrete1
 %agent = null, softmax, e_greedy, uncertainty, logistic
 
@@ -20,6 +20,9 @@ number_of_stimuli = 12;
 trial_plots = 1;
 %agent = 'fixedLR_softmax';
 beta=0.5; %Softmax temperture
+
+%Set pseudo seed for now!
+rng(66)
 
 
 
@@ -53,10 +56,12 @@ cond = output_names{distrib_num};
 distrib_pars = pars{distrib_num};
 distrib = conds{distrib_num};
 
-%set up seed
-softmax_seed=21; %hardcoded
+%set up seed used for softmax
+softmax_seed = 21; %hardcoded
 softmax_stream = RandStream('mt19937ar','Seed',softmax_seed);
 
+%create matrix of random numbers between 0 and 1, for logistic 
+choice_rand=rand(ntimesteps,1);
 
 constr = [];
 
@@ -105,8 +110,12 @@ nbasis=length(c);
 
 %% free parameters: learning rate (alpha), temporal decay (lambda, as in TD(lambda))
 alpha = params(1);
-lambda = params(2);
+% lambda = params(2);
 gamma = params(3);
+
+discrim = .5;
+u_threshold = 5.5;
+
 %epsilon = params(3);
 % log_k = params(4);
 % k = exp(log_k);
@@ -117,7 +126,7 @@ gamma = params(3);
 
 %% initialize RTs as a vector of zeros with a random initial RT;
 wtw = zeros(1,maxtrials);
-
+% shape = zeros(1,maxtrials);
 %Have initial rts be constant
 %Willingness to wait (WTW) is the quit time, to which the model pre-commits
 %at the start of the trial
@@ -298,7 +307,7 @@ if strcmpi(agent, 'logistic') || strcmpi(agent, 'uncertainty')
 
 
         p.beta = params(2);
-        p.tau  = .0001; % tau from Greek ???? -- value, price, cf ???? as trophys in Homer
+        p.tau  = params(4); % tau from Greek ???? -- value, price, cf ???? as trophys in Homer
 end
 
     if strcmpi(agent,'uncertainty')   
@@ -307,44 +316,7 @@ end
         uv_it(i+1,:) = uv_func;
         
     end 
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    
-    if strcmpi(agent, 'logistic')
-        %compared to other models that use a curve over which to choose (either by softmax or egreedy selection),
-        %kalman_uv_logistic computes explore and exploit choices and chooses according to a logistic.
-        u = sum(u_func)/length(u_func);
 
-        if u == 0
-            rt_explore = ceil(.5*ntimesteps);
-        else
-            rt_explore = find(u_func==max(u_func), 1); %return position of first max (and add gaussian noise?)
-        end
-
-        %what do to about p.discrim and u_threshold??
-        p.discrim=0;
-        u_threshold=0;
-        sigmoid = 1/(1+exp(-p.discrim.*(u - u_threshold))); %Rasch model with tradeoff as difficulty (location) parameter
-        
-        choice_rand=rand(ntimesteps,1);
-        
-        %compute hard max of value function alone 
-        if i == 1
-                rt_exploit = ceil(.5*ntimesteps); %default to mid-point of time domain
-        else
-            rt_exploit = find(v_func==max(v_func), 1); %only take the first max if there are two identical peaks.
-            if rt_exploit > max(tvec), rt_exploit = max(tvec); end
-        end
-        
-        if choice_rand(i) < sigmoid
-            %explore according to hardmax u
-            wtw(i+1) = rt_explore;
-        else
-            wtw(i+1) = rt_exploit;
-        end
-        
-        v_final = v_func; %no alterations of value function for logistic
-    end
-    
     
 %     softmax_seed=21; %hardcoded random number, used by softmax agent for weighted sampling of softmax function using randsample
 % 
@@ -392,8 +364,8 @@ end
         return_on_policy = (0)*ones(1,200);
     end
     
-
     
+
     %% choice rule
     
     %compute choice rule according to agent
@@ -407,15 +379,17 @@ end
     
     
     
-    % different exploration policies
+    %% different exploration policies
     if strcmpi(agent,'null')
         wtw(i+1) = null_policy(ntimesteps);
     elseif strcmpi(agent,'e_greedy')
         wtw(i+1) = e_greedy_policy(ntimesteps, return_on_policy(i,:));
     elseif strcmpi(agent, 'softmax') || strcmpi(agent, 'uncertainty')
-        %wtw(i+1) = softmax_policy(tvec, p_choice(i,:));
         wtw(i+1) = randsample(softmax_stream, tvec, 1, true, p_choice(i,:));
+    elseif strcmpi (agent, 'logistic')
+        [wtw(i+1),shape(i),sigmoid(i)]=logistic(i, choice_rand,u_func, ntimesteps, return_on_policy(i,:), tvec, discrim, u_threshold);
     end
+    %%
     
     %populate v_it for tracking final value function
     vfinal_it(i+1,:) = v_final; %store choice function for return according to model
@@ -493,67 +467,73 @@ end
         ev(i+1) = cdf(distrib, wtw(i+1)./trial_length);
     end
     
-    if trial_plots == 1
-        figure(1); %clf;
-        
-        %% figures for the movie
-        subplot(4,2,1:4)
-        title('black: wtw blue: RT(reward) red: RT(quit)');  hold on; ...
-            plot(find(rew_i(1:maxtrials)==large_rew),update_time(rew_i(1:maxtrials)==large_rew),'bo','LineWidth',2);
-        plot(find(rew_i(1:maxtrials)==small_rew),wtw(rew_i(1:maxtrials)==small_rew),'ro','LineWidth',2); hold off;
-        
-        axis([1 150 1 200])
-        
-        subplot(4,2,5)
-        plot(t,v_func);
-        ylabel('value')
-        subplot(4,2,6)
-        %barh(sigmoid); axis([-.1 1.1 0 2]);
-        plot(t(1:ntimesteps),v_jt);
-        hold on
-        plot(update_time(i),mean(v_jt),'r*')
-        ylabel('value temporal basis')
-        hold off
-        %title(sprintf('trial # = %i', h)); %
-        %         xlabel('time(ms)')
-        %         ylabel('reward value')
-        
-        subplot(4,2,7)
-        plot(cumulative_reward_fx(i,:));
-        ylabel('cumlulative reward function')
-        
-        subplot(4,2,8)
-        plot(return_on_policy(i,:));
-        ylabel('return on policy')
-        
-        drawnow update;
-        mov(i) = getframe(gcf);
-        
-        
-        
-        %% movie 2
-        figure(2)
-        plot(1:200,cumulative_reward_fx(i,:),1:200,return_on_policy(i,:),1:200,opportunity_cost(i,:),1:200, v_final,'LineWidth',2.5)
-        legend('cdf','return on policy', 'opp cost','v_final')
-        %         plot(cumulative_reward_fx(i,:),'r','LineWidth',2); hold on;
-%         plot(return_on_policy(i,:),'b','LineWidth',2); hold on;
-%         plot(opportunity_cost(i,:),'g','LineWidth',2); hold on;
-%         plot(v_final,'m','LineWidth',2);
+%     if trial_plots == 1
+%         figure(1); %clf;
 %         
-        drawnow update;
-        mov(i)=getframe(gcf);
-        
-        if strcmpi(agent, 'logistic') || strcmpi(agent, 'uncertainty')
-        %% movie 3
-        figure(3)
-        plot(1:200, u_func, 1:200, v_func)
-        legend('u_func','v_func')
-        
-        drawnow update;
-        mov(i)=getframe(gcf);
-        end
-    end
-    %     disp([i rts(i) rew(i) sum(value_all)])
+%         %% figures for the movie
+%         
+%         
+%         subplot(4,2,1:4)
+%         title('black: wtw blue: RT(reward) red: RT(quit)');  hold on; ...
+%             plot(find(rew_i(1:maxtrials)==large_rew),update_time(rew_i(1:maxtrials)==large_rew),'bo','LineWidth',2);
+%         plot(find(rew_i(1:maxtrials)==small_rew),wtw(rew_i(1:maxtrials)==small_rew),'ro','LineWidth',2); hold on;
+% %         plot(1:i,shape(
+% % 1:i),'k','LineWidth',2)        
+% %         axis([1 150 1 200])
+%         
+%         subplot(4,2,5)
+%         plot(t,v_func);
+%         ylabel('value')
+%         subplot(4,2,6)
+%         %barh(sigmoid); axis([-.1 1.1 0 2]);
+%         plot(t(1:ntimesteps),v_jt);
+%         hold on
+%         plot(update_time(i),mean(v_jt),'r*')
+%         ylabel('value temporal basis')
+%         hold off
+%         %title(sprintf('trial # = %i', h)); %
+%         %         xlabel('time(ms)')
+%         %         ylabel('reward value')
+%         
+%         subplot(4,2,7)
+%         plot(cumulative_reward_fx(i,:));
+%         ylabel('cumlulative reward function')
+%         
+%         subplot(4,2,8)
+%         plot(return_on_policy(i,:));
+%         ylabel('return on policy')
+%         
+%         drawnow update;
+%         mov(i) = getframe(gcf);
+%         
+%         
+%         
+%         %% movie 2
+%         figure(2)
+%         plot(1:200,cumulative_reward_fx(i,:),1:200,return_on_policy(i,:),1:200, v_final,1:200,(gamma*opportunity_cost(i,:)),'LineWidth',2.5)
+%         legend('cdf','return on policy','v_final','gamma*OC')
+%         %         plot(cumulative_reward_fx(i,:),'r','LineWidth',2); hold on;
+% %         plot(return_on_policy(i,:),'b','LineWidth',2); hold on;
+% %         plot(opportunity_cost(i,:),'g','LineWidth',2); hold on;
+% %         plot(v_final,'m','LineWidth',2);
+% %         
+%         drawnow update;
+%         mov(i)=getframe(gcf);
+%         
+% %         if strcmpi(agent, 'logistic') || strcmpi(agent, 'uncertainty')
+% %         %% movie 3
+% %         figure(3)
+% %         plot(1:i,sigmoid(1:i), 'rv', 1:i, choice_rand(1:i), 'bo','LineWidth',2)
+%         
+%         
+%         figure(4)
+%         plot(wtw(1:i),'o-','LineWidth',2)
+%         axis([1 150 1 200])
+%         drawnow update;
+%         mov(i)=getframe(gcf);
+% %         end
+%     end
+%         %disp([i rts(i) rew(i) sum(value_all)])
 end
 
 %Cost function
@@ -566,10 +546,15 @@ ret.mu_ij = mu_ij;
 ret.delta_ij = delta_ij;
 ret.e_ij = e_ij;
 ret.v_it = v_it;
+ret.v_jt = v_jt;
 ret.vfinal_it = vfinal_it;
 ret.rew_i = rew_i;
-ret.p_choice=p_choice;
+ret.p_choice = p_choice;
+ret.updatetime = update_time;
 ret.wtw = wtw;
 ret.reward_rate = reward_rate;
+ret.maxtrials = maxtrials;
+ret.u_func = u_func; % only for uncertainty
+ret.v_func = v_func; % only for uncertainty
 
 %plot_wtw_model_data(ret,wtw)

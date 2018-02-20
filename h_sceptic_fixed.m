@@ -13,9 +13,6 @@ function  [fx] = h_sceptic_fixed(x_t, theta, u, inF)
 
 alpha = 1./(1+exp(-theta(1)));
 
-gamma = 1./(1+exp(-theta(2)));
-
-
 if inF.fit_propspread
     prop_spread = 1./(1+exp(-theta(2))); %0..1 SD of Gaussian eligibility as proportion of interval
     sig_spread=prop_spread*range(inF.tvec); %determine SD of spread function in time units (not proportion)
@@ -61,6 +58,6 @@ e = sum(repmat(elig,nbasis,1).*inF.gaussmat_trunc, 2);
 %1) compute prediction error, scaled by eligibility trace
 delta = e.*(reward - x_t);
 
-fx = x_t + alpha.*delta + time*gamma;
+fx = x_t + alpha.*delta;
 
 
