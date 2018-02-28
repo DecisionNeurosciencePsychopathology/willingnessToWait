@@ -8,9 +8,10 @@
 %calls on RewFunction.m (Frank lab code)
 
 %inputs
-%params = [alpha, beta, gamma, tau]
+%params = [alpha, beta, gamma, tau, lamda]
 %distrib_num = 1 - uniform, 2 - gen. Pareto, 3 - beta, 4 - discrete1
-%agent = null, softmax, e_greedy, uncertainty, logistic
+%agent = null, softmax, e_greedy, uncertainty, logistic... if delay add
+%_delay to the end
 
 function [cost,constr,v_func,value_hist, wtw, mov, ret] = wtw_prototype(params,distrib_num, agent, trial_length, min_trials, timeout, large_rew, small_rew,sampling_reward)
 close all;
@@ -21,23 +22,24 @@ number_of_stimuli = 12;
 trial_plots = 1;
 %agent = 'fixedLR_softmax';
 beta=params(2); %Softmax temperture
+lamda=params(5); %decay coeff
 
 %Set pseudo seed for now!
 rng(66)
 
 
 
-if nargin < 4, trial_length = 200; end %200 100ms bins = 20s
-if nargin < 5, min_trials = 100; end % how many trials the agent will sample if he always waits
-if nargin < 6, timeout = 20; end % timeout after an immediate quit (2s - 20 10ms bins)
+if nargin < 5, trial_length = 200; end %200 100ms bins = 20s
+if nargin < 6, min_trials = 100; end % how many trials the agent will sample if he always waits
+if nargin < 7, timeout = 20; end % timeout after an immediate quit (2s - 20 10ms bins)
 
 task_length = min_trials*(trial_length+timeout);
 maxtrials = ceil(task_length./timeout);          %maximum number of trials in a run
 ntimesteps = trial_length; %number of timesteps in action space (set based on pseudorandom sampling of contingency above)
 
-if nargin < 7, large_rew = 10; end % the larger reward for waiting
-if nargin < 8, small_rew = 1; end % the smaller reward for quitting
-if nargin < 9, sampling_reward = 0.01; end % scaling constant representing the update to the
+if nargin < 8, large_rew = 10; end % the larger reward for waiting
+if nargin < 9, small_rew = 1; end % the smaller reward for quitting
+if nargin < 10, sampling_reward = 0.01; end % scaling constant representing the update to the
 %uncertainty function in arbitrary units of uncertainty.  Scaled to make
 %the sigmoid choice rule work.
 
@@ -167,7 +169,7 @@ return_on_policy = zeros(trial_length,maxtrials)';
 
 
     %%%%%%%%%% uncertainty driven %%%%%%%%%%%%%
-if strcmpi(agent, 'logistic') || strcmpi(agent, 'uncertainty')
+if strcmpi(agent, 'logistic') || strcmpi(agent, 'uncertainty') || strcmpi(agent, 'uncertainty_decay') || strcmpi(agent, 'logistic_decay')
         %assign reward
         switch distrib
             case 'gp'
@@ -248,6 +250,12 @@ while task_time<task_length
     e_ij(i,:) = sum(repmat(elig,nbasis,1).*gaussmat_trunc, 2);
     
     
+    %update the elig trace for uncertainty models to encapsulate the
+    %max value from all previous time steps to the current time bin (i)
+    cume_ij = e_ij(i,:);
+    max_idx = find(max(cume_ij) == cume_ij);
+    cume_ij(1:max_idx(end)) = max(cume_ij);
+    
     %% update value
     %1) compute prediction error, scaled by eligibility trace
     %this is the basis-wise update, which does not converge to underlying EV
@@ -262,15 +270,27 @@ while task_time<task_length
     
     %Variants of learning rule
     if ismember(agent, {'softmax','e_greedy'})
-      mu_ij(i+1,:) = mu_ij(i,:) + alpha.*delta_ij(i,:);
-         % update mu for uncertainty
-    else %this is for uncertainty
+           mu_ij(i+1,:) = mu_ij(i,:) + alpha.*delta_ij(i,:);
+    elseif ismember(agent, {'softmax_decay','e_greedy_decay'})
+        %this agent decays the value of basis functions outside of the temporal generalization
+        decay = -lamda.*(1-e_ij(i,:)).*mu_ij(i,:);
+        mu_ij(i+1,:) = mu_ij(i,:) + alpha.*delta_ij(i,:) + decay;
+    else
+    %this is for uncertainty
         %Kalman gain
         Q_ij(i,:)=0; %for now may remove in future
         k_ij(i,:) = (sigma_ij(i,:) + Q_ij(i,:))./(sigma_ij(i,:) + Q_ij(i,:) + sigma_noise); 
 
-        % update mu for uncertainty
-        mu_ij(i+1,:) = mu_ij(i,:) + k_ij(i,:).*delta_ij(i,:);
+        if ismember(agent,{'uncertainty_decay','logistic_decay'})
+            %this agent decays the value of basis functions outside of the temporal generalization
+            decay = -lamda.*(1-cume_ij).*mu_ij(i,:);
+            mu_ij(i+1,:) = mu_ij(i,:) + alpha.*delta_ij(i,:) + decay;
+        else
+            % update mu for uncertainty
+            mu_ij(i+1,:) = mu_ij(i,:) + k_ij(i,:).*delta_ij(i,:);
+        end
+        
+
         
     end
     
@@ -297,17 +317,17 @@ while task_time<task_length
     %     Q_ij(i+1,:) = p.omega.*abs(delta_ij(i,:)); %use abs of PE so that any large surprise enhances effective gain.
     %     %Compute the Kalman gains for the current trial (potentially adding process noise)
 
-if strcmpi(agent, 'logistic') || strcmpi(agent, 'uncertainty')
+if strcmpi(agent, 'logistic') || strcmpi(agent, 'uncertainty') || strcmpi(agent, 'uncertainty_decay') || strcmpi(agent, 'logistic_decay')
         
-        %update the elig trace for uncertainty models to encapsulate the
-        %max value from all previous time steps to the current time bin (i)
-        u_eij = e_ij(i,:);
-        max_idx = find(max(u_eij) == u_eij);
-        u_eij(1:max_idx(end)) = max(u_eij);
+%         %update the elig trace for uncertainty models to encapsulate the
+%         %max value from all previous time steps to the current time bin (i)
+%         u_eij = e_ij(i,:);
+%         max_idx = find(max(u_eij) == u_eij);
+%         u_eij(1:max_idx(end)) = max(u_eij);
     
     
         %Update posterior variances on the basis of Kalman gains
-        sigma_ij(i+1,:) = (1 - u_eij.*k_ij(i,:)).*(sigma_ij(i,:));
+        sigma_ij(i+1,:) = (1 - cume_ij.*k_ij(i,:)).*(sigma_ij(i,:));
 
         %Uncertainty is a function of Kalman uncertainties.
         u_jt=sigma_ij(i+1,:)'*ones(1,ntimesteps) .* gaussmat;  
@@ -318,7 +338,7 @@ if strcmpi(agent, 'logistic') || strcmpi(agent, 'uncertainty')
         p.tau  = params(4); % tau from Greek ???? -- value, price, cf ???? as trophys in Homer
 end
 
-    if strcmpi(agent,'uncertainty')   
+    if strcmpi(agent,'uncertainty') || strcmpi(agent,'uncertainty_decay')
         uv_func=p.tau*v_func_cum + (1-p.tau)*u_func; %mix together value and uncertainty according to tau
         v_final = uv_func;
         uv_it(i+1,:) = uv_func;
@@ -392,9 +412,9 @@ end
         wtw(i+1) = null_policy(ntimesteps);
     elseif strcmpi(agent,'e_greedy')
         wtw(i+1) = e_greedy_policy(ntimesteps, return_on_policy(i,:));
-    elseif strcmpi(agent, 'softmax') || strcmpi(agent, 'uncertainty')
+    elseif strcmpi(agent, 'softmax') || strcmpi(agent, 'uncertainty') || strcmpi(agent, 'uncertainty_decay')
         wtw(i+1) = randsample(softmax_stream, tvec, 1, true, p_choice(i,:));
-    elseif strcmpi (agent, 'logistic')
+    elseif strcmpi (agent, 'logistic') || strcmpi (agent, 'logistic_decay')
         [wtw(i+1),shape(i),sigmoid(i)]=logistic(i, choice_rand,u_func, ntimesteps, return_on_policy(i,:), tvec, discrim, u_threshold);
     end
     %%

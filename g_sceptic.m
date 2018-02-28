@@ -17,9 +17,16 @@ nbasis = inG.nbasis;
 
 v=x_t(1:nbasis)*ones(1,ntimesteps) .* gaussmat; %use vector outer product to replicate weight vector
 
+
 v_func = sum(v); %subjective value by timestep as a sum of all basis functions
 
+
+% add cumsum
+v_func = cumsum(v_func);
+
 p_choice = (exp((v_func-max(v_func))/beta)) / (sum(exp((v_func-max(v_func))/beta))); %Divide by temperature
+
+% add opportunity cost 
 
 rt_prev = u(1); %% retrieve previous RT
 

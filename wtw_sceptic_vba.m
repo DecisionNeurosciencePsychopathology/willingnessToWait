@@ -50,6 +50,9 @@ n_phi = 1;
 %% Load in the data struct for now, in theory we should just paa the subject's data to the function at this point instead of constantly loading it from file.
 results_dir = 'E:\data\sceptic\wtw\';
 
+%load data... will need to make a higher function that reads in 
+load('wtw_data.mat')
+data = wtw_struct(2).trialData;
 
 
 options.inF.fit_nbasis = 0;
