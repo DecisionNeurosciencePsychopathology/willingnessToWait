@@ -50,10 +50,11 @@ n_phi = 1;
 %% Load in the data struct for now, in theory we should just paa the subject's data to the function at this point instead of constantly loading it from file.
 results_dir = 'E:\data\sceptic\wtw\';
 
-%load data... will need to make a higher function that reads in 
+%%%% load data... will need to make a higher function that reads in 
 load('wtw_data.mat')
-data = wtw_struct(2).trialData;
-
+data = wtw_struct(4).trialData;
+data = data(1:length(data)-1); %remove the row with no rt
+%%%%
 
 options.inF.fit_nbasis = 0;
 range_RT = 200; %The max time until new trial is 20 seconds
@@ -132,10 +133,12 @@ options.inF.kalman.(model)=1; %Declare which model to use if kalman
 switch model
     %fixed learning rate (alpha) for PE+ and PE-; softmax choice rule
     case 'fixed'
-        h_name = @h_sceptic_fixed;
+        h_name = @h_wtwsceptic_fixed;
         hidden_variables = 1; %tracks only value
-        priors.muX0 = zeros(hidden_variables*n_basis,1);
-        priors.SigmaX0 = zeros(hidden_variables*n_basis);
+        priors.muX0 = zeros(hidden_variables*n_basis+1,1);
+        priors.SigmaX0 = zeros(hidden_variables*n_basis+1); % added 1 for rr
+        n_phi = 2; % one for return on policy, one for choice rule
+        n_theta = 2;
 %         priors.SigmaX0 = 10*ones(hidden_variables*n_basis);
 
     case 'fixed_opportunity_cost'
@@ -284,15 +287,24 @@ options.inG.kalman = options.inF.kalman;
 
 
 if multinomial
-    rtrnd = round([data.latency]'*(n_steps-iti)/range_RT)' + iti; %Add in ITI of 2 seconds
+    %rtrnd = round([data.latency]'*(n_steps-iti)/range_RT)' + iti; %Add in ITI of 2 seconds
+    rtrnd = round([data.latency]'*10);
     rtrnd(rtrnd==0)=1;
     %rtrnd(rtrnd>200)=200;
     max_rt = max(rtrnd);
-    dim = struct('n',hidden_variables*n_basis,'n_theta',n_theta+fit_propspread,'n_phi',n_phi,'p',n_steps);
+    
+    %add if statement for rr (+1 to n)
+    dim = struct('n',hidden_variables*n_basis+1,'n_theta',n_theta+fit_propspread,'n_phi',n_phi,'p',n_steps);
     options.sources(1) = struct('out',1:n_steps,'type',2);
     
-    %% compute multinomial response -- renamed 'y' here instead of 'rtbin'
+    
+   %% compute multinomial response -- renamed 'y' here instead of 'rtbin'
     y = zeros(n_steps, length(trialsToFit));
+    
+    for i = 1:length(trialsToFit)
+        y(rtrnd(i),i) =1;
+    end
+    
     skip_mat = y; %This keeps track of all 'win' trials ie the trials the subjects waited we don't want to fit these.
     win_or_quit = {data.trialResult}; %Did the subject win or quit
     win_or_quit_idx = []; %For graphing purposes
@@ -378,8 +390,9 @@ if multinomial
     priors.SigmaPhi = 1e1*eye(dim.n_phi);
     % Inputs
     time  = [data.initialTime];
-    u = [([data.latency]'*(n_steps-iti)/range_RT+iti)'; [data.payoff]; time(trialsToFit); rtrnd]; %Add in ITI time
+    u = [[data.latency]*10; [data.payoff]; time(trialsToFit); rtrnd']; %data.latency * 10 to get from sec to ms
     u = [zeros(size(u,1),1) u(:,1:end-1)];
+    
     % Observation function
     switch model
         case 'kalman_logistic'
@@ -389,12 +402,13 @@ if multinomial
         case 'stay'
             g_name = @g_WSLS;
         otherwise
-            g_name = @g_sceptic;
+            g_name = @g_wtwsceptic;
     end
 else
     n_phi = 2; % [autocorrelation lambda and response bias/meanRT K] instead of temperature
     dim = struct('n',hidden_variables*n_basis,'n_theta',n_theta+fit_propspread,'n_phi',n_phi, 'n_t', n_t);
-    y = (data{trialsToFit,'rt'}*0.1*n_steps/range_RT)';
+    %y = (data{trialsToFit,'rt'}*0.1*n_steps/range_RT)';
+    y = (data{trialsToFit,'rt'})';
     priors.a_alpha = Inf;
     priors.b_alpha = 0;
     priors.a_sigma = 1;     % Jeffrey's prior
@@ -456,10 +470,10 @@ if graphics==1
     diagnose_wtw_sceptic()
 end
 
-if saveresults
-cd(results_dir);
-%% save output figure
-% h = figure(1);
-% savefig(h,sprintf('results/%d_%s_multinomial%d_multisession%d_fixedParams%d',id,model,multinomial,multisession,fixed_params_across_runs))
-save(sprintf('SHIFTED_U_CORRECT%d_%s_multinomial%d_multisession%d_fixedParams%d_uaversion%d_sceptic_vba_fit', id, model, multinomial,multisession,fixed_params_across_runs, u_aversion), 'posterior', 'out');
-end
+% if saveresults
+% cd(results_dir);
+% %% save output figure
+% % h = figure(1);
+% % savefig(h,sprintf('results/%d_%s_multinomial%d_multisession%d_fixedParams%d',id,model,multinomial,multisession,fixed_params_across_runs))
+% save(sprintf('SHIFTED_U_CORRECT%d_%s_multinomial%d_multisession%d_fixedParams%d_uaversion%d_sceptic_vba_fit', id, model, multinomial,multisession,fixed_params_across_runs, u_aversion), 'posterior', 'out');
+% end
