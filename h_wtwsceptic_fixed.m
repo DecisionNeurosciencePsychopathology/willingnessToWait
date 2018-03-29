@@ -28,6 +28,10 @@ end
 rt = u(1);
 reward = u(2);
 time = u(3);
+
+iti = 20; 
+tau = iti + rt;
+
 if inF.fit_nbasis
     %% convert normally distributed theta(2) to discrete uniform number of bases
     nbasis_cdf = cdf('Normal',theta(3),inF.muTheta2, inF.SigmaTheta2);
@@ -70,7 +74,13 @@ fx(1:length(x_t)-1,:) = value + alpha.*delta;
 
 
 %add in reward rate as hidden state
-fx(end) = x_t(end) + alpha2*(reward/rt - x_t(end));
+if inF.tau_rr 
+    fx(end) = ((1-alpha2).^tau)*x_t(end)+(1-(1-alpha2).^tau)*(reward/tau);
+else 
+    fx(end) = x_t(end) + alpha2*(reward/rt - x_t(end));
+end
+
+
 
 end
 

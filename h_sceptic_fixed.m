@@ -55,9 +55,23 @@ elig=elig/auc*refspread;
 %Gaussian spread function.
 e = sum(repmat(elig,nbasis,1).*inF.gaussmat_trunc, 2);
 
-%1) compute prediction error, scaled by eligibility trace
-delta = e.*(reward - x_t);
+%value 
+value = x_t(1:length(x_t)-1);
 
-fx = x_t + alpha.*delta;
+
+%1) compute prediction error, scaled by eligibility trace
+delta = e.*(reward - value);
+
+fx = value + alpha.*delta;
+
+alpha2 = 1;
+
+%add in reward rate as hidden state
+if inF.tau_rr 
+    fx(end) = 
+else 
+    fx(end) = x_t(end) + alpha2*(rew_i/update_time - x_t(end));
+end
+
 
 

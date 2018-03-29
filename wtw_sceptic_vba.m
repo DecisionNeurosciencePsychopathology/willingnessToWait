@@ -1,4 +1,11 @@
-function [posterior,out] = wtw_sceptic_vba(data,id,model,n_basis, multinomial,multisession,fixed_params_across_runs,fit_propspread,n_steps,u_aversion, saveresults, graphics)
+function [posterior,out] = wtw_sceptic_vba(data,id,model,n_basis, multinomial,multisession,fixed_params_across_runs,fit_propspread,n_steps,u_aversion,tau_rr, saveresults, graphics)
+
+
+
+%working models = fixed, null, uncertainty (uv sum)
+
+
+
 
 %% fits SCEPTIC model to Clock Task subject data using VBA toolbox
 % example call:
@@ -16,14 +23,14 @@ function [posterior,out] = wtw_sceptic_vba(data,id,model,n_basis, multinomial,mu
 close all
 
 %% uncertainty aversion for UV_sum
-if nargin<9
+if nargin<10
     u_aversion = 0;
     saveresults = 0; %change later
     graphics = 0;
-elseif nargin<10
+elseif nargin<11
     saveresults = 0; %change later
     graphics = 0;
-elseif nargin<11
+elseif nargin<12
     graphics = 0;
 end
 
@@ -35,8 +42,10 @@ options.inG.autocorrelation = 'none';
 %Do not grpah Volterra kernals
 options.plotKernals = 0;
 
-if ~graphics
+if graphics
     options.DisplayWin = 1;
+else 
+    options.DisplayWin = 0;
 end
 %% set up dim defaults
 n_theta = 1;
@@ -52,9 +61,11 @@ results_dir = 'E:\data\sceptic\wtw\';
 
 %%%% load data... will need to make a higher function that reads in 
 load('wtw_data.mat')
-data = wtw_struct(4).trialData;
+data = wtw_struct(3).trialData;
 data = data(1:length(data)-1); %remove the row with no rt
 %%%%
+
+options.inF.tau_rr = tau_rr; %RossOtto Reward Rate
 
 options.inF.fit_nbasis = 0;
 range_RT = 200; %The max time until new trial is 20 seconds
@@ -139,8 +150,15 @@ switch model
         priors.SigmaX0 = zeros(hidden_variables*n_basis+1); % added 1 for rr
         n_phi = 2; % one for return on policy, one for choice rule
         n_theta = 2;
-%         priors.SigmaX0 = 10*ones(hidden_variables*n_basis);
 
+
+    case 'null' %no updates
+        h_name = @h_wtwsceptic_null;
+        hidden_variables = 1;
+        n_phi = 0;
+        n_theta = 0;
+        priors.muX0 = zeros(hidden_variables*n_basis+1,1);
+        priors.SigmaX0 = zeros(hidden_variables*n_basis+1); % added 1 for rr
     case 'fixed_opportunity_cost'
         h_name = @h_sceptic_fixed_opportunity_cost;
         hidden_variables = 2; %tracks only value
@@ -181,13 +199,14 @@ switch model
         if fit_propspread
             n_theta = 0;
         end
-        n_phi  = 2;  %Beta and discrim
+        n_phi  = 3;  %Beta and discrim and gamma (for return on policy)
+        n_theta = 2;
         %Different observation function than other kalman models
 %         g_name = @g_sceptic_logistic;
         hidden_variables = 2; %tracks value and uncertainty
-        priors.muX0 = [zeros(n_basis,1); sigma_noise*ones(n_basis,1)];
-        priors.SigmaX0 = zeros(hidden_variables*n_basis); %This is Discrim not Beta for this model
-        h_name = @h_sceptic_kalman;
+        priors.muX0 = [zeros(n_basis,1); sigma_noise*ones(n_basis+1,1)];
+        priors.SigmaX0 = zeros(hidden_variables*n_basis+1); %This is Discrim not Beta for this model
+        h_name = @h_wtwsceptic_kalman;
         %Define indifference point between explore and exploit (p = 0.5) as proportion reduction in variance from initial value
         tradeoff = 0.1209529; %From what was the optimized overall
         options.inG.u_threshold = (1 - tradeoff * sigma_noise);
@@ -206,9 +225,11 @@ switch model
         %kalman learning rule and uncertainty update; V and U are mixed by tau; softmax choice over U+V
     case 'kalman_uv_sum'
         hidden_variables = 2; %tracks value and uncertainty
-        priors.muX0 = [zeros(n_basis,1); sigma_noise*ones(n_basis,1)];
-        priors.SigmaX0 = zeros(hidden_variables*n_basis);
-        h_name = @h_sceptic_kalman;
+        priors.muX0 = [zeros(n_basis,1); sigma_noise*ones(n_basis,1);zeros(1,1)];
+        priors.SigmaX0 = zeros(hidden_variables*n_basis+1);
+        h_name = @h_wtwsceptic_kalman;
+        n_theta = 2;
+        n_phi = 2; % one for return on policy, one for choice rule
         options.inF.u_aversion = u_aversion;
         options.inG.u_aversion = u_aversion;
         
@@ -396,11 +417,13 @@ if multinomial
     % Observation function
     switch model
         case 'kalman_logistic'
-            g_name = @g_sceptic_logistic;
+            g_name = @g_wtwsceptic_logistic;
         case 'win_stay_lose_switch'
             g_name = @g_WSLS;
         case 'stay'
             g_name = @g_WSLS;
+        case 'null'
+            g_name = @g_wtwsceptic_null;
         otherwise
             g_name = @g_wtwsceptic;
     end
