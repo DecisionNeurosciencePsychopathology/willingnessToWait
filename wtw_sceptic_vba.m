@@ -1,8 +1,8 @@
-function [posterior,out] = wtw_sceptic_vba(data,id,model,n_basis, multinomial,multisession,fixed_params_across_runs,fit_propspread,n_steps,u_aversion,tau_rr, saveresults, graphics)
+function [posterior,out] = wtw_sceptic_vba(data1,id,model,n_basis, multinomial,multisession,fixed_params_across_runs,fit_propspread,n_steps,u_aversion,tau_rr, saveresults, graphics)
 
 
 
-%working models = fixed, null, uncertainty (uv sum)
+%working models = fixed, null, uncertainty (uv sum), logistic
 
 
 
@@ -57,13 +57,35 @@ n_phi = 1;
 % fixed_params_across_runs = 1;
 
 %% Load in the data struct for now, in theory we should just paa the subject's data to the function at this point instead of constantly loading it from file.
-results_dir = 'E:\data\sceptic\wtw\';
+if tau_rr    
+    if ~exist('willingnessToWait/tau_rr','dir')
+        mkdir('tau_rr')
+    end
+    
+    rr_type = 'tau_rr';
+else
+    if ~exist('willingnessToWait/normal_rr','dir')
+        mkdir('normal_rr')
+    end
+    
+    rr_type = 'normal_rr';
+end
 
-%%%% load data... will need to make a higher function that reads in 
-load('wtw_data.mat')
-data = wtw_struct(3).trialData;
-data = data(1:length(data)-1); %remove the row with no rt
-%%%%
+if ~exist(sprintf('%s/%s',rr_type,num2str(id)),'dir')
+    mkdir(sprintf('%s/%s',rr_type,num2str(id)))
+end
+
+results_dir = sprintf('%s/%s', rr_type,num2str(id));
+
+%remove row from data if there is nothing in it
+i = 1;
+for ii = 1:length(data1)
+   if isempty(data1(ii).latency) == 0
+       data(i) = data1(ii);
+       i= i + 1;
+   end
+end
+
 
 options.inF.tau_rr = tau_rr; %RossOtto Reward Rate
 
@@ -493,10 +515,12 @@ if graphics==1
     diagnose_wtw_sceptic()
 end
 
-% if saveresults
-% cd(results_dir);
-% %% save output figure
-% % h = figure(1);
-% % savefig(h,sprintf('results/%d_%s_multinomial%d_multisession%d_fixedParams%d',id,model,multinomial,multisession,fixed_params_across_runs))
-% save(sprintf('SHIFTED_U_CORRECT%d_%s_multinomial%d_multisession%d_fixedParams%d_uaversion%d_sceptic_vba_fit', id, model, multinomial,multisession,fixed_params_across_runs, u_aversion), 'posterior', 'out');
-% end
+if saveresults
+    cd(results_dir);
+    %% save output figure
+%     h = figure(1);
+%     savefig(h,sprintf('%d_%s_multinomial%d_multisession%d_fixedParams%d_tau_rr%d',id,model,multinomial,multisession,fixed_params_across_runs,tau_rr))
+     save(sprintf('SHIFTED_U_CORRECT%d_%s_multinomial%d_multisession%d_fixedParams%d_uaversion%d_tau_rr%d_sceptic_vba_fit', id, model, multinomial,multisession,fixed_params_across_runs, u_aversion,tau_rr), 'posterior', 'out');
+     cd ..
+     cd ..
+end
