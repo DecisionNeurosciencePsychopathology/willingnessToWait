@@ -15,6 +15,8 @@ function L = wtw_analysis
 %models
 
 model_list = {'fixed', 'null','kalman_uv_sum', 'kalman_logistic'};
+samples_to_use = {'all', 'qdf', 'wdf'};
+%model_list = {'fixed'};
 
 %% start 
 load('wtw_data.mat')
@@ -32,7 +34,10 @@ end
 L = zeros((length(model_list)*2),(length(ids)));
 L_id = zeros(1,length(ids));
 
-for h = 0:1
+%Override ids so it is only a good subject
+ids=881100;
+
+for h = 0%:1
     tau_rr = h;
     
     disp('Tau_RR = ')
@@ -58,20 +63,24 @@ for h = 0:1
 
             
             id = ids(i);
-
+            
             disp('ID: ')
             disp(id)
-
-            [post, out] = wtw_sceptic_vba(data,id,model,n_basis, multinomial,multisession,fixed_params_across_runs,fit_propspread,n_steps,u_aversion, tau_rr, saveresults, graphics);
-            
-            L(m, i) = out.F;
-            L_id(1,i) = id;
-
+            try                
+                [post, out] = wtw_sceptic_vba(data,id,samples_to_use{1},model,n_basis, multinomial,multisession,fixed_params_across_runs,fit_propspread,n_steps,u_aversion, tau_rr, saveresults, graphics);
+                L(m, i) = out.F;
+                L_id(1,i) = id;
+            catch
+                L(m, i) = nan;
+                L_id(1,i) = nan;
+                fprintf('Subject %d did not complete the State space model\n\n',id)
+                uncompleted_ids{m,i} = id;
+            end
         end
     end
 end
 
 
-save(sprintf('all_outF_%s', date),'L')
+save(sprintf('all_outF_%s', date),'L');
 
 end

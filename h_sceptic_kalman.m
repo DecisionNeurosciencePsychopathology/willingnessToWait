@@ -26,26 +26,26 @@ hidden_state_index = reshape(hidden_state_index,nbasis,inF.hidden_state);
 
 %Set the proper paramters NOTE gamma is first then phi for sigma volatility
 %model.
-if inF.kalman.processnoise, omega = 1./(1+exp(-theta(1))); end
-if inF.kalman.kalman_sigmavolatility || inF.kalman.kalman_sigmavolatility_local || inF.kalman.kalman_sigmavolatility_precision
-    if inF.no_gamma
-        gamma = 1-phi;
-    else
-        gamma = 1./(1+exp(-theta(2)));
-    end
-    phi = 1./(1+exp(-theta(1)));
-    z = x_t(hidden_state_index(:,3)); %Volatility
-end
-if inF.kalman.kalman_uv_sum_sig_vol
-    gamma = 1./(1+exp(-theta(2)));
-    phi = 1./(1+exp(-theta(3)));
-    %     if inF.u_aversion
-    %         tau = theta(3)./1000; % scale it down a bit
-    %     else
-    %         tau = 1./(1+exp(-theta(3)-log(inF.sigma_noise)));
-    %     end
-    %     z = x_t(hidden_state_index(:,3)); %Volatility
-end
+% % if inF.kalman.processnoise, omega = 1./(1+exp(-theta(1))); end
+% % if inF.kalman.kalman_sigmavolatility || inF.kalman.kalman_sigmavolatility_local || inF.kalman.kalman_sigmavolatility_precision
+% %     if inF.no_gamma
+% %         gamma = 1-phi;
+% %     else
+% %         gamma = 1./(1+exp(-theta(2)));
+% %     end
+% %     phi = 1./(1+exp(-theta(1)));
+% %     z = x_t(hidden_state_index(:,3)); %Volatility
+% % end
+% % if inF.kalman.kalman_uv_sum_sig_vol
+% %     gamma = 1./(1+exp(-theta(2)));
+% %     phi = 1./(1+exp(-theta(3)));
+% %     %     if inF.u_aversion
+% %     %         tau = theta(3)./1000; % scale it down a bit
+% %     %     else
+% %     %         tau = 1./(1+exp(-theta(3)-log(inF.sigma_noise)));
+% %     %     end
+% %     %     z = x_t(hidden_state_index(:,3)); %Volatility
+% % end
 if inF.kalman.kalman_uv_logistic, tradeoff = 1./(1+exp(-theta(1))); end
 if inF.kalman.fixed_uv, alpha = 1./(1+exp(-theta(2))); end %Alpha should always be two as tau should always be 1
 
@@ -167,43 +167,43 @@ if inF.kalman.kalman_uv_sum
         fx(hidden_state_index(:,1))=tau.*mu + (1-tau).*sigma; %mix together value and uncertainty according to tau
         %fx(1:nbasis)=tau.*mu + (1-tau).*fx(nbasis+1:end); %mix together value and uncertainty according to tau
     end
-elseif inF.kalman.kalman_sigmavolatility
-    %Update value
-    fx(hidden_state_index(:,1)) = mu + k.*delta;
-    %Track smooth estimate of volatility according to unsigned PE history
-    fx(hidden_state_index(:,3)) = gamma.*z + phi.*abs(sum(delta));
-elseif inF.kalman.kalman_sigmavolatility_local
-    %Update value
-    fx(hidden_state_index(:,1)) = mu + k.*delta;
-    
-    %Overwrite the sigma term
-    fx(hidden_state_index(:,2)) = (1 - e.*k).*sigma + z;
-    
-    %Track smooth estimate of volatility according to unsigned PE history
-    %locally instead of globally
-    fx(hidden_state_index(:,3)) = (1-e).*z + e.*(gamma*z + phi.*abs(sum(delta)));
-elseif inF.kalman.kalman_sigmavolatility_precision
-    %Grab priors
-    prior_sigma = inF.priors.muX0(hidden_state_index(:,2));
-    
-    %Update value
-    fx(hidden_state_index(:,1)) = mu + k.*delta;
-    
-    %Overwrite the sigma term
-    fx(hidden_state_index(:,2)) = (1 - e.*k).*sigma + z;
-    
-    %Track smooth estimate of volatility according to unsigned PE history
-    %locally instead of globally
-    fx(hidden_state_index(:,3)) = (1-e).*z + e.*(gamma*z + (prior_sigma./sigma)*phi.*abs(sum(delta)));
-elseif inF.kalman.kalman_uv_sum_sig_vol
-    %Update the value
-    mu = mu + k.*delta;
-    if inF.u_aversion
-        fx(hidden_state_index(:,1))= mu + tau.*sigma; %mix together value and uncertainty according to tau
-    else
-        fx(hidden_state_index(:,1))=tau.*mu + (1-tau).*sigma; %mix together value and uncertainty according to tau
-    end
-    fx(hidden_state_index(:,3)) = gamma.*z + phi.*abs(sum(delta));
+% % elseif inF.kalman.kalman_sigmavolatility
+% %     %Update value
+% %     fx(hidden_state_index(:,1)) = mu + k.*delta;
+% %     %Track smooth estimate of volatility according to unsigned PE history
+% %     fx(hidden_state_index(:,3)) = gamma.*z + phi.*abs(sum(delta));
+% % elseif inF.kalman.kalman_sigmavolatility_local
+% %     %Update value
+% %     fx(hidden_state_index(:,1)) = mu + k.*delta;
+% %     
+% %     %Overwrite the sigma term
+% %     fx(hidden_state_index(:,2)) = (1 - e.*k).*sigma + z;
+% %     
+% %     %Track smooth estimate of volatility according to unsigned PE history
+% %     %locally instead of globally
+% %     fx(hidden_state_index(:,3)) = (1-e).*z + e.*(gamma*z + phi.*abs(sum(delta)));
+% % elseif inF.kalman.kalman_sigmavolatility_precision
+% %     %Grab priors
+% %     prior_sigma = inF.priors.muX0(hidden_state_index(:,2));
+% %     
+% %     %Update value
+% %     fx(hidden_state_index(:,1)) = mu + k.*delta;
+% %     
+% %     %Overwrite the sigma term
+% %     fx(hidden_state_index(:,2)) = (1 - e.*k).*sigma + z;
+% %     
+% %     %Track smooth estimate of volatility according to unsigned PE history
+% %     %locally instead of globally
+% %     fx(hidden_state_index(:,3)) = (1-e).*z + e.*(gamma*z + (prior_sigma./sigma)*phi.*abs(sum(delta)));
+% % elseif inF.kalman.kalman_uv_sum_sig_vol
+% %     %Update the value
+% %     mu = mu + k.*delta;
+% %     if inF.u_aversion
+% %         fx(hidden_state_index(:,1))= mu + tau.*sigma; %mix together value and uncertainty according to tau
+% %     else
+% %         fx(hidden_state_index(:,1))=tau.*mu + (1-tau).*sigma; %mix together value and uncertainty according to tau
+% %     end
+% %     fx(hidden_state_index(:,3)) = gamma.*z + phi.*abs(sum(delta));
     
 elseif inF.kalman.fixed_uv
     %Track sigma use fixed value update, so we'll need alpha in the mix

@@ -1,4 +1,4 @@
-function [posterior,out] = wtw_sceptic_vba(data1,id,model,n_basis, multinomial,multisession,fixed_params_across_runs,fit_propspread,n_steps,u_aversion,tau_rr, saveresults, graphics)
+function [posterior,out] = wtw_sceptic_vba(data1,id,sample_to_use,model,n_basis, multinomial,multisession,fixed_params_across_runs,fit_propspread,n_steps,u_aversion,tau_rr, saveresults, graphics)
 
 
 
@@ -23,14 +23,14 @@ function [posterior,out] = wtw_sceptic_vba(data1,id,model,n_basis, multinomial,m
 close all
 
 %% uncertainty aversion for UV_sum
-if nargin<10
+if nargin<11
     u_aversion = 0;
     saveresults = 0; %change later
     graphics = 0;
-elseif nargin<11
+elseif nargin<12
     saveresults = 0; %change later
     graphics = 0;
-elseif nargin<12
+elseif nargin<13
     graphics = 0;
 end
 
@@ -71,11 +71,12 @@ else
     rr_type = 'normal_rr';
 end
 
-if ~exist(sprintf('%s/%s',rr_type,num2str(id)),'dir')
-    mkdir(sprintf('%s/%s',rr_type,num2str(id)))
+results_dir = sprintf('ss_test/%s/%s', rr_type,num2str(id));
+
+if ~exist(results_dir,'dir')
+    mkdir(results_dir)
 end
 
-results_dir = sprintf('%s/%s', rr_type,num2str(id));
 
 %remove row from data if there is nothing in it
 i = 1;
@@ -502,6 +503,29 @@ priors.SigmaTheta = 1e1*eye(dim.n_theta); % lower the learning rate variance -- 
 options.priors = priors;
 options.inG.priors = priors; %copy priors into inG for parameter transformation (e.g., Gaussian -> uniform)
 
+
+%Remove the trials in which there was a large reward & the latency and between .1<20s
+%3 conditions:
+%all - all trials except wins
+%qdf - all + no immediate quits
+%wdf - qdf + no waits over 19.9
+
+wins = cellfun(@(x) strcmp(x,'win'), {data.trialResult});
+imm_quit = cellfun(@(x) strcmp(x,'optSmall'), {data.initialPos}) &  [data.latency]<0.1;
+
+if strcmp(sample_to_use,'all')
+    trial_index_to_remove = wins;
+elseif strcmp(sample_to_use,'qdf')
+    trial_index_to_remove = wins | imm_quit;
+elseif strcmp(sample_to_use,'wdf')
+    trial_index_to_remove = wins | imm_quit | [data.latency]>19.9;
+else
+    error('Which sample mto use all, qdf or wdf?')
+end
+
+options.isYout = zeros(size(y));
+options.isYout(:,trial_index_to_remove) = 1;
+
 [posterior,out] = VBA_NLStateSpaceModel(y,u,h_name,g_name,dim,options);
 
 
@@ -512,15 +536,15 @@ if graphics==1
     plot(pre_trsnaformed_rtrnd,'ro')
     title('Red is waits Blue is quits')
     
-    diagnose_wtw_sceptic()
+    %diagnose_wtw_sceptic()
 end
 
 if saveresults
-    cd(results_dir);
+%     cd(results_dir);
     %% save output figure
 %     h = figure(1);
 %     savefig(h,sprintf('%d_%s_multinomial%d_multisession%d_fixedParams%d_tau_rr%d',id,model,multinomial,multisession,fixed_params_across_runs,tau_rr))
-     save(sprintf('SHIFTED_U_CORRECT%d_%s_multinomial%d_multisession%d_fixedParams%d_uaversion%d_tau_rr%d_sceptic_vba_fit', id, model, multinomial,multisession,fixed_params_across_runs, u_aversion,tau_rr), 'posterior', 'out');
-     cd ..
-     cd ..
+     save([results_dir filesep sprintf('sample_%s_%d_%s_multinomial%d_multisession%d_fixedParams%d_uaversion%d_tau_rr%d_sceptic_vba_fit',sample_to_use, id, model, multinomial,multisession,fixed_params_across_runs, u_aversion,tau_rr)], 'posterior', 'out');
+%      cd ..
+%      cd ..
 end

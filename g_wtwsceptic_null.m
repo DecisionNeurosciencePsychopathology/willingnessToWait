@@ -1,4 +1,4 @@
-function  [ gx ] = g_wtwsceptic(x_t,phi,u,inG)
+function  [ gx ] = g_wtwsceptic_null(x_t,phi,u,inG)
 % INPUT
 % - x : Q-values (2x1)
 % - beta : temperature (1x1)
@@ -28,7 +28,13 @@ v_func = cumsum(v_func);
 
 %choice rule
 % p_choice = (exp((v_func-max(v_func)))) / (sum(exp((v_func-max(v_func))))); %Divide by temperature
-p_choice = v_func;
+%p_choice = v_func;
+p_choice = repmat(1/ntimesteps,1,ntimesteps);
+
+%Make the model pick one radom time point
+% % x=round(1+rand(1)*(200-1));
+% % gx = zeros(1,length(v_func));
+% % gx(x)=1;
 
 rt_prev = u(1); %% retrieve previous RT
 

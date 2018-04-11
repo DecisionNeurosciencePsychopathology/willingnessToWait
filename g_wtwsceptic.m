@@ -10,7 +10,8 @@ function  [ gx ] = g_wtwsceptic(x_t,phi,u,inG)
 %temperature value
 beta = exp(phi(1));
 
-gamma = phi(2)/10;
+%gamma = phi(2)/10;
+gamma = exp(phi(2));
 
 %pull variables to set up gaussians
 gaussmat=inG.gaussmat;
@@ -37,7 +38,7 @@ return_on_policy = cumulative_reward_fx-(gamma*opp_cost);
 %choice rule
 %p_choice = (exp((v_func-max(v_func))/beta)) / (sum(exp((v_func-max(v_func))/beta))); %Divide by temperature
 
-p_choice = (exp((return_on_policy-max(return_on_policy))/beta)) / (sum(exp((return_on_policy-max(return_on_policy))./beta))); 
+p_choice = (exp((return_on_policy-max(return_on_policy))/beta)) / (sum(exp((return_on_policy-max(return_on_policy))/beta))); 
 
 rt_prev = u(1); %% retrieve previous RT
 
