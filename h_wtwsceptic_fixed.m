@@ -13,7 +13,10 @@ function  [fx] = h_wtwsceptic_fixed(x_t, theta, u, inF)
 
 alpha = 1./(1+exp(-theta(1)));
 
-alpha2 = 1./(1+exp(-theta(2)));
+% alpha2 = 1./(1+exp(-theta(2)));
+
+alpha2 = alpha;
+
 
 if inF.fit_propspread
     prop_spread = 1./(1+exp(-theta(3))); %0..1 SD of Gaussian eligibility as proportion of interval
@@ -70,7 +73,15 @@ fx = zeros(length(x_t),1);
 %1) compute prediction error, scaled by eligibility trace
 delta = e.*(reward - value);
 
-fx(1:length(x_t)-1,:) = value + alpha.*delta;
+fx(1:end-1,:) = value + alpha.*delta;
+
+
+%if inF.diagnos_model
+% % h=figure(99);
+% % subplot(2,2,1)
+% % plot(fx(1:end-1), 'Linewidth',5)
+% % title(sprintf('value of basis function with RT: %.2f', rt))
+%end
 
 
 %add in reward rate as hidden state

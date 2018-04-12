@@ -10,8 +10,9 @@ function  [ gx ] = g_wtwsceptic(x_t,phi,u,inG)
 %temperature value
 beta = exp(phi(1));
 
-%gamma = phi(2)/10;
-gamma = exp(phi(2));
+% gamma = phi(2)/10;
+gamma = 10^(phi(2) + 1);
+%gamma = exp(phi(2));
 
 %pull variables to set up gaussians
 gaussmat=inG.gaussmat;
@@ -41,6 +42,19 @@ return_on_policy = cumulative_reward_fx-(gamma*opp_cost);
 p_choice = (exp((return_on_policy-max(return_on_policy))/beta)) / (sum(exp((return_on_policy-max(return_on_policy))/beta))); 
 
 rt_prev = u(1); %% retrieve previous RT
+
+
+% % h=figure(99);
+% % subplot(2,2,2)
+% % plot(p_choice,'r','LineWidth',4)
+% % title(sprintf('P Choice AKA gx with beta: %d',beta))
+% % subplot(2,2,3)
+% % plot(return_on_policy,'k','LineWidth',4)
+% % title('Return on policy')
+% % subplot(2,2,4)
+% % plot(opp_cost,'g','LineWidth',4)
+% % title(sprintf('Opportunity cost with gamma: %d',gamma))
+
 
 %% OUTPUT
 gx = p_choice';

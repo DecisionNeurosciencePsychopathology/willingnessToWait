@@ -10,13 +10,13 @@ function L = wtw_analysis
     n_steps = 200;
     u_aversion = 0;
     saveresults = 1; %change later
-    graphics = 0;
+    graphics = 1;
 
 %models
 
-model_list = {'fixed', 'null','kalman_uv_sum', 'kalman_logistic'};
+%model_list = {'fixed', 'null','kalman_uv_sum', 'kalman_logistic'};
 samples_to_use = {'all', 'qdf', 'wdf'};
-%model_list = {'fixed'};
+model_list = {'fixed'};
 
 %% start 
 load('wtw_data.mat')

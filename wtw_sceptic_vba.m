@@ -430,12 +430,12 @@ if multinomial
     priors.a_sigma = 1;     % Jeffrey's prior
     priors.b_sigma = 1;     % Jeffrey's prior
     options.binomial = 1;
-    priors.muPhi = zeros(dim.n_phi,1); % exp tranform
-    priors.SigmaPhi = 1e1*eye(dim.n_phi);
+%     priors.muPhi = zeros(dim.n_phi,1); % exp tranform
+%     priors.SigmaPhi = 1e1*eye(dim.n_phi);
     % Inputs
     time  = [data.initialTime];
     u = [[data.latency]*10; [data.payoff]; time(trialsToFit); rtrnd']; %data.latency * 10 to get from sec to ms
-    u = [zeros(size(u,1),1) u(:,1:end-1)];
+    %u = [zeros(size(u,1),1) u(:,1:end-1)];
     
     % Observation function
     switch model
@@ -451,25 +451,25 @@ if multinomial
             g_name = @g_wtwsceptic;
     end
 else
-    n_phi = 2; % [autocorrelation lambda and response bias/meanRT K] instead of temperature
-    dim = struct('n',hidden_variables*n_basis,'n_theta',n_theta+fit_propspread,'n_phi',n_phi, 'n_t', n_t);
-    %y = (data{trialsToFit,'rt'}*0.1*n_steps/range_RT)';
-    y = (data{trialsToFit,'rt'})';
-    priors.a_alpha = Inf;
-    priors.b_alpha = 0;
-    priors.a_sigma = 1;     % Jeffrey's prior
-    priors.b_sigma = 1;     % Jeffrey's prior
-    priors.muPhi = [0, 0];  % K, lambda
-%     priors.SigmaPhi = diag([0,1]); % get rid of the K
-    priors.SigmaPhi = diag([1,1]);
-    options.binomial = 0;
-    options.sources(1) = struct('out',1,'type',0);
-    prev_rt = [0 y(1:end-1)];
-    % Inputs
-    u = [(data{trialsToFit, 'rt'}*0.1*n_steps/range_RT)'; data{trialsToFit, 'score'}'; prev_rt];
-    u = [zeros(size(u,1),1) u(:,1:end-1)];
-    % Observation function
-    g_name = @g_sceptic_continuous;
+%     n_phi = 2; % [autocorrelation lambda and response bias/meanRT K] instead of temperature
+%     dim = struct('n',hidden_variables*n_basis,'n_theta',n_theta+fit_propspread,'n_phi',n_phi, 'n_t', n_t);
+%     %y = (data{trialsToFit,'rt'}*0.1*n_steps/range_RT)';
+%     y = (data{trialsToFit,'rt'})';
+%     priors.a_alpha = Inf;
+%     priors.b_alpha = 0;
+%     priors.a_sigma = 1;     % Jeffrey's prior
+%     priors.b_sigma = 1;     % Jeffrey's prior
+%     priors.muPhi = [0, 5];  % Beta, gamma
+% %     priors.SigmaPhi = diag([0,1]); % get rid of the K
+%     priors.SigmaPhi = diag([1,1]);
+%     options.binomial = 0;
+%     options.sources(1) = struct('out',1,'type',0);
+%     prev_rt = [0 y(1:end-1)];
+%     % Inputs
+%     u = [(data{trialsToFit, 'rt'}*0.1*n_steps/range_RT)'; data{trialsToFit, 'score'}'; prev_rt];
+%     u = [zeros(size(u,1),1) u(:,1:end-1)];
+%     % Observation function
+%     g_name = @g_sceptic_continuous;
     
 end
 %
@@ -498,8 +498,13 @@ options.skipf(1) = 1;
 options.skipf(logical(sum(isnan(skip_mat)))) = 1;
 
 %% priors
+dim.n_theta = 1;
+
+
 priors.muTheta = zeros(dim.n_theta,1);
 priors.SigmaTheta = 1e1*eye(dim.n_theta); % lower the learning rate variance -- it tends to be low in the posterior
+priors.muPhi = [0, 0]; %Beta, gamma
+priors.SigmaPhi = 1e2*eye(dim.n_phi);
 options.priors = priors;
 options.inG.priors = priors; %copy priors into inG for parameter transformation (e.g., Gaussian -> uniform)
 
@@ -526,7 +531,33 @@ end
 options.isYout = zeros(size(y));
 options.isYout(:,trial_index_to_remove) = 1;
 
-[posterior,out] = VBA_NLStateSpaceModel(y,u,h_name,g_name,dim,options);
+figure(500)
+subplot(1,2,1)
+[time_bin,~]=find(y==1);
+plot(time_bin, 'bo','LineWidth',3,'MarkerSize',10)
+axis([0,length(time_bin),0,max(time_bin)])
+title('Y Original')
+subplot(1,2,2)
+tmp_idx = sum(options.isYout)~=200;
+surviving_data_points=time_bin;
+surviving_data_points(~tmp_idx)=nan;
+% [surviving_data_points,~]=find(y(:,tmp_idx)==1);
+plot(surviving_data_points, 'ro','LineWidth',3,'MarkerSize',10)
+axis([0,length(time_bin),0,max(time_bin)])
+title(sprintf('Y of sub-sample %s',sample_to_use))
+
+% options.priors.iQy = cell(1, length(u));
+% for jj = 1 : length(trial_index_to_remove)
+%     if trial_index_to_remove(jj)
+%         options.priors.iQy(jj) = {repmat(0.00001,n_t,n_t)};
+%     else
+%         options.priors.iQy(jj) = cell(1,1);
+%     end
+% end
+
+%%u(:,trial_index_to_remove)=[];
+
+ [posterior,out] = VBA_NLStateSpaceModel(y,u,h_name,g_name,dim,options);
 
 
 if graphics==1
