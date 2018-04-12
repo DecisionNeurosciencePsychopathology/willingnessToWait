@@ -1,4 +1,4 @@
-function [posterior,out] = wtw_sceptic_vba(data1,id,sample_to_use,model,n_basis, multinomial,multisession,fixed_params_across_runs,fit_propspread,n_steps,u_aversion,tau_rr, saveresults, graphics)
+function [posterior,out] = wtw_sceptic_vba(data1,id,sample_to_use,y_type, model,n_basis, multinomial,multisession,fixed_params_across_runs,fit_propspread,n_steps,u_aversion,tau_rr, saveresults, graphics)
 
 
 
@@ -11,6 +11,8 @@ function [posterior,out] = wtw_sceptic_vba(data1,id,sample_to_use,model,n_basis,
 % example call:
 % [posterior,out]=clock_sceptic_vba(10638,'modelname',nbasis,multinomial,multisession,fixed_params_across_runs,fit_propsrpead)
 % id:           5-digit subject id in Michael Hallquist's BPD study
+%sample_to_use = 'wdf'
+%y_type = 0 - 1 only at quit, 1 - 1 after quit, 2 - nan after quit 
 % only works with 'fixed' (fixed learning rate SCEPTIC) so far
 % n_basis:      8 works well, 4 also OK
 % multinomial:  if 1 fits p_chosen from the softmax; continuous RT (multinomial=0) works less well
@@ -22,15 +24,17 @@ function [posterior,out] = wtw_sceptic_vba(data1,id,sample_to_use,model,n_basis,
 %%
 close all
 
+
+
 %% uncertainty aversion for UV_sum
-if nargin<11
+if nargin<13
     u_aversion = 0;
     saveresults = 0; %change later
     graphics = 0;
-elseif nargin<12
+elseif nargin<14
     saveresults = 0; %change later
     graphics = 0;
-elseif nargin<13
+elseif nargin<15
     graphics = 0;
 end
 
@@ -344,10 +348,25 @@ if multinomial
     
    %% compute multinomial response -- renamed 'y' here instead of 'rtbin'
     y = zeros(n_steps, length(trialsToFit));
+    % y_type = 0: only 1 where quit
+    % y_type = 1: 1 after after quit
+    % y_type = 2: nan after quit
     
     for i = 1:length(trialsToFit)
         y(rtrnd(i),i) =1;
+        
+        if y_type == 1
+            for j = rtrnd(i):200
+                y(j,i) = 1;
+            end
+        elseif y_type == 2
+            for j = rtrnd(i)+1:200
+                y(j,i) = nan;
+            end
+        end
+    
     end
+   
     
     skip_mat = y; %This keeps track of all 'win' trials ie the trials the subjects waited we don't want to fit these.
     win_or_quit = {data.trialResult}; %Did the subject win or quit

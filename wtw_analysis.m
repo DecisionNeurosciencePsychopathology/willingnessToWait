@@ -17,6 +17,7 @@ function L = wtw_analysis
 %model_list = {'fixed', 'null','kalman_uv_sum', 'kalman_logistic'};
 samples_to_use = {'all', 'qdf', 'wdf'};
 model_list = {'fixed'};
+y_type = [0,1,2]; %only type 1 gave good results
 
 %% start 
 load('wtw_data.mat')
@@ -67,7 +68,7 @@ for h = 0%:1
             disp('ID: ')
             disp(id)
             try                
-                [post, out] = wtw_sceptic_vba(data,id,samples_to_use{1},model,n_basis, multinomial,multisession,fixed_params_across_runs,fit_propspread,n_steps,u_aversion, tau_rr, saveresults, graphics);
+                [post, out] = wtw_sceptic_vba(data,id,samples_to_use{1},y_type(1),model,n_basis, multinomial,multisession,fixed_params_across_runs,fit_propspread,n_steps,u_aversion, tau_rr, saveresults, graphics);
                 L(m, i) = out.F;
                 L_id(1,i) = id;
             catch
