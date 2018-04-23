@@ -9,15 +9,14 @@ function L = wtw_analysis
     fit_propspread = 0;
     n_steps = 200;
     u_aversion = 0;
-    saveresults = 1; %change later
+    saveresults = 0; %change later
     graphics = 1;
 
 %models
 
-%model_list = {'fixed', 'null','kalman_uv_sum', 'kalman_logistic'};
+%model_list = {'fixed', 'fixed_decay', 'null','kalman_uv_sum', 'kalman_logistic'};
 samples_to_use = {'all', 'qdf', 'wdf'};
-model_list = {'fixed'};
-y_type = [0,1,2]; %only type 1 gave good results
+model_list = {'fixed_decay'};
 
 %% start 
 load('wtw_data.mat')
@@ -36,9 +35,10 @@ L = zeros((length(model_list)*2),(length(ids)));
 L_id = zeros(1,length(ids));
 
 %Override ids so it is only a good subject
-ids=881100;
+%ids=214710;
+ids = 216174;
 
-for h = 0%:1
+for h = 0%:1 %Tau_rr or no
     tau_rr = h;
     
     disp('Tau_RR = ')
@@ -67,16 +67,17 @@ for h = 0%:1
             
             disp('ID: ')
             disp(id)
-            try                
-                [post, out] = wtw_sceptic_vba(data,id,samples_to_use{1},y_type(1),model,n_basis, multinomial,multisession,fixed_params_across_runs,fit_propspread,n_steps,u_aversion, tau_rr, saveresults, graphics);
+% %             try                
+                [post, out] = wtw_sceptic_vba(data,id,samples_to_use{2},model,n_basis, multinomial,multisession,fixed_params_across_runs,fit_propspread,n_steps,u_aversion, tau_rr, saveresults, graphics);
+                diagnose_mux
                 L(m, i) = out.F;
                 L_id(1,i) = id;
-            catch
-                L(m, i) = nan;
-                L_id(1,i) = nan;
-                fprintf('Subject %d did not complete the State space model\n\n',id)
-                uncompleted_ids{m,i} = id;
-            end
+% %             catch
+% %                 L(m, i) = nan;
+% %                 L_id(1,i) = nan;
+% %                 fprintf('Subject %d did not complete the State space model\n\n',id)
+% %                 uncompleted_ids{m,i} = id;
+% %             end
         end
     end
 end

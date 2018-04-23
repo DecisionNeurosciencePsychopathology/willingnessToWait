@@ -41,8 +41,6 @@ return_on_policy = cumulative_reward_fx-(gamma*opp_cost);
 
 p_choice = (exp((return_on_policy-max(return_on_policy))/beta)) / (sum(exp((return_on_policy-max(return_on_policy))/beta))); 
 
-rt_prev = u(1); %% retrieve previous RT
-
 
 % % h=figure(99);
 % % subplot(2,2,2)

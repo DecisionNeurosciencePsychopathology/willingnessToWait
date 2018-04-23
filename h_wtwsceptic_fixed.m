@@ -12,6 +12,7 @@ function  [fx] = h_wtwsceptic_fixed(x_t, theta, u, inF)
 %   - fx: evolved basis values/heights (nbasis x 1)
 
 alpha = 1./(1+exp(-theta(1)));
+%alpha = sig(theta(1));
 
 % alpha2 = 1./(1+exp(-theta(2)));
 
@@ -31,6 +32,7 @@ end
 rt = u(1);
 reward = u(2);
 time = u(3);
+rt_time_bin = u(4);
 
 iti = 20; 
 tau = iti + rt;
@@ -59,13 +61,41 @@ auc=sum(elig);
 %will be 1.0 even for a partial Gaussian where part of the distribution falls outside of the interval.
 elig=elig/auc*refspread;
 
+%If r is a 'win' i.e. the subject quit and recived a 1 as reward elig is 0
+%after the rt else we have a boxcar from the peak of the elig back to 0
+ peak_elig = max(elig);
+
+if inF.use_boxcar_elig
+   if reward==1
+       elig(rt_time_bin+1:end)=0;
+       elig(1:rt_time_bin)=peak_elig;
+
+   else
+       %peak_elig = elig(rt_time_bin);
+       elig(rt_time_bin+1:end)=0;
+   end
+end
+
+
+%If we want to replace the elig trace with a dirac impulse function
+%I don't think this is correct
+if inF.use_dirac
+    elig = zeros(size(elig));
+    elig(rt_time_bin)=reward;
+end
+
+
+% figure(88)
+% plot(elig)
+
 %compute the intersection of the Gaussian spread function with the truncated Gaussian basis.
-%this is essentially summing the area under the curve of each truncated RBF weighted by the truncated
+%this is essentially summinF the area under the curve of each truncated RBF weighted by the truncated
 %Gaussian spread function.
 e = sum(repmat(elig,nbasis,1).*inF.gaussmat_trunc, 2);
 
+
 %value 
-value = x_t(1:length(x_t)-1);
+value = x_t(1:nbasis);
 
 %initalize fx
 fx = zeros(length(x_t),1);
@@ -73,7 +103,7 @@ fx = zeros(length(x_t),1);
 %1) compute prediction error, scaled by eligibility trace
 delta = e.*(reward - value);
 
-fx(1:end-1,:) = value + alpha.*delta;
+fx(1:nbasis,:) = value + alpha.*delta;
 
 
 %if inF.diagnos_model
@@ -91,6 +121,29 @@ else
     fx(end) = x_t(end) + alpha2*(reward/rt - x_t(end));
 end
 
+
+% % %For diagnosis purposes only
+% % gamma = 10^(0.1688 + 1);
+% % gaussmat=inF.gaussmat;
+% % ntimesteps = inF.ntimesteps;
+% % nbasis = inF.nbasis;
+% % 
+% % v=fx(1:nbasis)*ones(1,ntimesteps) .* gaussmat; %use vector outer product to replicate weight vector
+% % 
+% % 
+% % v_func = sum(v); %subjective value by timestep as a sum of all basis functions
+% % 
+% % % add cumsum
+% % v_func = cumsum(v_func);
+% %  
+% % 
+% % % add opportunity cost = rr*trial length (max 200)
+% % opp_cost = fx(end).*(1:ntimesteps);
+% % 
+% % cumulative_reward_fx = v_func;
+% % 
+% % return_on_policy = cumulative_reward_fx-(gamma*opp_cost);
+% % fx(nbasis+1:end-1) = return_on_policy;
 
 
 end

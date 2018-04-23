@@ -1,18 +1,14 @@
-function [posterior,out] = wtw_sceptic_vba(data1,id,sample_to_use,y_type, model,n_basis, multinomial,multisession,fixed_params_across_runs,fit_propspread,n_steps,u_aversion,tau_rr, saveresults, graphics)
+function [posterior,out] = wtw_sceptic_vba(data1,id,sample_to_use,model,n_basis, multinomial,multisession,fixed_params_across_runs,fit_propspread,n_steps,u_aversion,tau_rr, saveresults, graphics)
 
 
 
 %working models = fixed, null, uncertainty (uv sum), logistic
 
 
-
-
 %% fits SCEPTIC model to Clock Task subject data using VBA toolbox
 % example call:
 % [posterior,out]=clock_sceptic_vba(10638,'modelname',nbasis,multinomial,multisession,fixed_params_across_runs,fit_propsrpead)
 % id:           5-digit subject id in Michael Hallquist's BPD study
-%sample_to_use = 'wdf'
-%y_type = 0 - 1 only at quit, 1 - 1 after quit, 2 - nan after quit 
 % only works with 'fixed' (fixed learning rate SCEPTIC) so far
 % n_basis:      8 works well, 4 also OK
 % multinomial:  if 1 fits p_chosen from the softmax; continuous RT (multinomial=0) works less well
@@ -24,17 +20,15 @@ function [posterior,out] = wtw_sceptic_vba(data1,id,sample_to_use,y_type, model,
 %%
 close all
 
-
-
 %% uncertainty aversion for UV_sum
-if nargin<13
+if nargin<11
     u_aversion = 0;
     saveresults = 0; %change later
     graphics = 0;
-elseif nargin<14
+elseif nargin<12
     saveresults = 0; %change later
     graphics = 0;
-elseif nargin<15
+elseif nargin<13
     graphics = 0;
 end
 
@@ -91,8 +85,11 @@ for ii = 1:length(data1)
    end
 end
 
-
+%Options changing the mechanics of the model evolution function
 options.inF.tau_rr = tau_rr; %RossOtto Reward Rate
+options.inF.use_boxcar_elig = 1; %If we want to use the boxcar idea to update the eligibility traces
+options.inF.use_dirac = 0; %Use the dirac impulse fuciton (will overwrite the boxcar method)
+
 
 options.inF.fit_nbasis = 0;
 range_RT = 200; %The max time until new trial is 20 seconds
@@ -176,7 +173,7 @@ switch model
         priors.muX0 = zeros(hidden_variables*n_basis+1,1);
         priors.SigmaX0 = zeros(hidden_variables*n_basis+1); % added 1 for rr
         n_phi = 2; % one for return on policy, one for choice rule
-        n_theta = 2;
+        n_theta = 1;
 
 
     case 'null' %no updates
@@ -186,20 +183,21 @@ switch model
         n_theta = 0;
         priors.muX0 = zeros(hidden_variables*n_basis+1,1);
         priors.SigmaX0 = zeros(hidden_variables*n_basis+1); % added 1 for rr
-    case 'fixed_opportunity_cost'
-        h_name = @h_sceptic_fixed_opportunity_cost;
-        hidden_variables = 2; %tracks only value
-        priors.muX0 = zeros(hidden_variables*n_basis,1);
-        priors.SigmaX0 = zeros(hidden_variables*n_basis);
-        n_theta = 2;
-        n_phi = 3- strcmp(options.inG.autocorrelation, 'none');
-%         priors.SigmaX0 = 10*ones(hidden_variables*n_basis);
+%     case 'fixed_opportunity_cost'
+%         h_name = @h_sceptic_fixed_opportunity_cost;
+%         hidden_variables = 2; %tracks only value
+%         priors.muX0 = zeros(hidden_variables*n_basis,1);
+%         priors.SigmaX0 = zeros(hidden_variables*n_basis);
+%         n_theta = 2;
+%         n_phi = 3- strcmp(options.inG.autocorrelation, 'none');
+% %         priors.SigmaX0 = 10*ones(hidden_variables*n_basis);
     case 'fixed_decay'
-        h_name = @h_sceptic_fixed_decay;
+        h_name = @h_wtwsceptic_fixed_decay;
         hidden_variables = 1; %tracks only value
-        priors.muX0 = zeros(hidden_variables*n_basis,1);
-        priors.SigmaX0 = zeros(hidden_variables*n_basis);
+        priors.muX0 = zeros(hidden_variables*n_basis+1,1);
+        priors.SigmaX0 = zeros(hidden_variables*n_basis+1);
         n_theta = 2; %learning rate and decay outside of the eligibility trace
+        n_phi = 2; % one for return on policy, one for choice rule
 
         
         %kalman learning rule (no free parameter); softmax choice over value curve
@@ -209,15 +207,8 @@ switch model
             n_theta = 0;
         end
         hidden_variables = 2; %tracks value and uncertainty
-        priors.muX0 = [zeros(n_basis,1); sigma_noise*ones(n_basis,1)];
-        priors.SigmaX0 = zeros(hidden_variables*n_basis);
-        h_name = @h_sceptic_kalman;
-        
-        %kalman learning rule (no free parameter); PEs enhance gain through process noise Q according to parameter omega
-    case 'kalman_processnoise'
-        hidden_variables = 2; %tracks value and uncertainty
-        priors.muX0 = [zeros(n_basis,1); sigma_noise*ones(n_basis,1)];
-        priors.SigmaX0 = zeros(hidden_variables*n_basis);
+        priors.muX0 = [zeros(n_basis,1); sigma_noise*ones(n_basis+1,1)];
+        priors.SigmaX0 = zeros(hidden_variables*n_basis +1);
         h_name = @h_sceptic_kalman;
         
         %old kalman with explore/exploit hardmax selection according to logistic function
@@ -240,15 +231,6 @@ switch model
         %Predetermined random trials
         %options.inG.choice_rand=rand(n_steps,1);
         
-        %kalman learning rule (no free parameter); PEs inflate posterior variance (sigma) according to phi and gamma
-    case 'kalman_sigmavolatility'
-        n_theta = 2;
-        hidden_variables = 3; %tracks value and uncertainty and volatility
-        priors.muX0 = [zeros(n_basis,1); sigma_noise*ones(n_basis,1); zeros(n_basis,1);];
-        priors.SigmaX0 = zeros(hidden_variables*n_basis);
-        options.inF.no_gamma = 0; %If 1 gamma will be 1-phi
-        h_name = @h_sceptic_kalman;
-        
         %kalman learning rule and uncertainty update; V and U are mixed by tau; softmax choice over U+V
     case 'kalman_uv_sum'
         hidden_variables = 2; %tracks value and uncertainty
@@ -259,68 +241,6 @@ switch model
         n_phi = 2; % one for return on policy, one for choice rule
         options.inF.u_aversion = u_aversion;
         options.inG.u_aversion = u_aversion;
-        
-    case 'kalman_uv_sum_sig_vol'
-        %n_phi  = 2;  %Beta and Tau
-        n_theta = 3; %sigma gamma tau
-        hidden_variables = 3; %tracks value and uncertainty and volatility
-        priors.muX0 = [zeros(n_basis,1); sigma_noise*ones(n_basis,1); zeros(n_basis,1);];
-        priors.SigmaX0 = zeros(hidden_variables*n_basis);
-        h_name = @h_sceptic_kalman;
-        options.inF.u_aversion = u_aversion;
-        options.inG.u_aversion = u_aversion;
-        
-    case 'fixed_uv'
-        n_theta = 2; %tau alpha
-        hidden_variables = 2; %tracks value and uncertainty
-        priors.muX0 = [zeros(n_basis,1); sigma_noise*ones(n_basis,1)];
-        priors.SigmaX0 = zeros(hidden_variables*n_basis);
-        h_name = @h_sceptic_kalman;
-        options.inF.u_aversion = u_aversion;
-        options.inG.u_aversion = u_aversion;
-        
-    case 'kalman_sigmavolatility_local'
-        %n_theta = 2;
-        hidden_variables = 3; %tracks value and uncertainty and volatility
-        priors.muX0 = [zeros(n_basis,1); sigma_noise*ones(n_basis,1); zeros(n_basis,1);];
-        priors.SigmaX0 = zeros(hidden_variables*n_basis);
-        options.inF.no_gamma = no_gamma; %If 1 gamma will be 1-phi
-        if options.inF.no_gamma
-            n_theta = 1;
-        else
-            n_theta = 2;
-        end
-        h_name = @h_sceptic_kalman;
-        
-    case 'kalman_sigmavolatility_precision'
-        %n_theta = 2;
-        hidden_variables = 3; %tracks value and uncertainty and volatility
-        priors.muX0 = [zeros(n_basis,1); sigma_noise*ones(n_basis,1); zeros(n_basis,1);];
-        options.inF.priors = priors;
-        priors.SigmaX0 = zeros(hidden_variables*n_basis);
-        options.inF.no_gamma = no_gamma; %If 1 gamma will be 1-phi
-        if options.inF.no_gamma
-            n_theta = 1;
-        else
-            n_theta = 2;
-        end
-        h_name = @h_sceptic_kalman;
-    case 'win_stay_lose_switch'
-        n_phi  = 2;  %Beta and precision
-        n_theta = 0;
-        h_name = @h_dummy;
-        hidden_variables = 0; %tracks only value
-        priors.muX0 = zeros(hidden_variables*n_basis,1);
-        priors.SigmaX0 = zeros(hidden_variables*n_basis);
-        options.inG.stay = 0;
-    case 'stay'
-        n_phi  = 2;  %Beta and precision
-        n_theta = 0;
-        h_name = @h_dummy;
-        hidden_variables = 0; %tracks only value
-        priors.muX0 = zeros(hidden_variables*n_basis,1);
-        priors.SigmaX0 = zeros(hidden_variables*n_basis);
-        options.inG.stay = 1;
     otherwise
         disp('The model you have entered does not match any of the default names, check spelling!');
         return
@@ -332,6 +252,15 @@ options.inF.hidden_state = hidden_variables;
 %Map the necessary options from F to G
 options.inG.hidden_state = options.inF.hidden_state;
 options.inG.kalman = options.inF.kalman;
+
+%Was the trial a win or not
+wins = cellfun(@(x) strcmp(x,'win'), {data.trialResult});
+%Was the trial an immediate quit or not
+imm_quit = cellfun(@(x) strcmp(x,'optSmall'), {data.initialPos}) &  [data.latency]<0.1;
+
+%Save for later
+options.inF.wins = wins;
+options.inF.imm_quit = imm_quit;
 
 
 if multinomial
@@ -348,25 +277,12 @@ if multinomial
     
    %% compute multinomial response -- renamed 'y' here instead of 'rtbin'
     y = zeros(n_steps, length(trialsToFit));
-    % y_type = 0: only 1 where quit
-    % y_type = 1: 1 after after quit
-    % y_type = 2: nan after quit
     
     for i = 1:length(trialsToFit)
-        y(rtrnd(i),i) =1;
-        
-        if y_type == 1
-            for j = rtrnd(i):200
-                y(j,i) = 1;
-            end
-        elseif y_type == 2
-            for j = rtrnd(i)+1:200
-                y(j,i) = nan;
-            end
+        if wins(i)~=1 %Only include non-wins
+            y(rtrnd(i),i) =1;
         end
-    
     end
-   
     
     skip_mat = y; %This keeps track of all 'win' trials ie the trials the subjects waited we don't want to fit these.
     win_or_quit = {data.trialResult}; %Did the subject win or quit
@@ -375,75 +291,6 @@ if multinomial
     %For debug purposes save a pre-transformed rtrnd
     pre_trsnaformed_rtrnd = rtrnd;
     
-%     %Need to determine if they would have waited longer than the actual quit.
-%     for i = 1:length(trialsToFit)
-%         if strcmp(win_or_quit{i},'quit')
-%             y(rtrnd(i), i) = 1;
-%             win_or_quit_idx(i)=false;
-%         else
-%             win_or_quit_idx(i)=true;
-%             %Get current wait
-%             current_wait = rtrnd(i);
-%             current_wait_trial=i;
-%             
-%             %Initalize last longest wait
-%             if ~exist('last_longest_wait','var')
-%                 last_longest_wait = current_wait;
-%                 last_wait_trial = i;
-%             end
-%             
-%             
-%             ct=1;
-%             if current_wait > last_longest_wait
-%                 last_longest_wait = current_wait;
-%             else
-%                 while last_wait_trial<current_wait_trial
-%                     if current_wait<rtrnd(current_wait_trial-ct)
-%                         last_longest_wait = rtrnd(current_wait_trial-ct);
-%                         break
-%                     end
-%                     if ct>0
-%                         last_wait_trial = last_wait_trial + 1; %update while loop
-%                     end
-%                     ct=ct+1; %Update counter
-%                 end
-%             end
-%             
-%             
-%             %Update last longest wait accordingly
-% %             if current_wait>=last_longest_wait 
-% %                 last_longest_wait = current_wait;
-% %             else
-% %                 ct=1;
-% %                 while last_wait_trial<current_wait_trial
-% %                     if current_wait<rtrnd(current_wait_trial-ct)
-% %                         last_longest_wait = rtrnd(current_wait_trial-ct);
-% %                         break
-% %                     end
-% %                     last_wait_trial = last_wait_trial + 1; %update while loop
-% %                     ct=ct+1; %Update counter
-% %                 end
-% %             end
-%             
-%             %Update the last waited trial
-%             last_wait_trial = current_wait_trial;
-%             
-%             %Update waits and rtrnd
-%             rtrnd(i) = last_longest_wait;
-%             y(rtrnd(i), i) = 1;
-%             
-%             
-% %              if rtrnd(i)==max_rt
-% %                  y(rtrnd(i), i) = 1;
-% %              else
-% %                  
-% %              end
-%             %Would they have waited longer? 
-%             %y(rtrnd(i), i) = 1;
-% %             y(rtrnd(i), i) = 0;
-% %             skip_mat(rtrnd(i), i) = nan;
-%          end
-%     end
     priors.a_alpha = Inf;   % infinite precision prior
     priors.b_alpha = 0;
     priors.a_sigma = 1;     % Jeffrey's prior
@@ -454,7 +301,7 @@ if multinomial
     % Inputs
     time  = [data.initialTime];
     u = [[data.latency]*10; [data.payoff]; time(trialsToFit); rtrnd']; %data.latency * 10 to get from sec to ms
-    %u = [zeros(size(u,1),1) u(:,1:end-1)];
+    u = [nan(size(u,1),1) u(:,1:end-1)];
     
     % Observation function
     switch model
@@ -468,62 +315,33 @@ if multinomial
             g_name = @g_wtwsceptic_null;
         otherwise
             g_name = @g_wtwsceptic;
-    end
-else
-%     n_phi = 2; % [autocorrelation lambda and response bias/meanRT K] instead of temperature
-%     dim = struct('n',hidden_variables*n_basis,'n_theta',n_theta+fit_propspread,'n_phi',n_phi, 'n_t', n_t);
-%     %y = (data{trialsToFit,'rt'}*0.1*n_steps/range_RT)';
-%     y = (data{trialsToFit,'rt'})';
-%     priors.a_alpha = Inf;
-%     priors.b_alpha = 0;
-%     priors.a_sigma = 1;     % Jeffrey's prior
-%     priors.b_sigma = 1;     % Jeffrey's prior
-%     priors.muPhi = [0, 5];  % Beta, gamma
-% %     priors.SigmaPhi = diag([0,1]); % get rid of the K
-%     priors.SigmaPhi = diag([1,1]);
-%     options.binomial = 0;
-%     options.sources(1) = struct('out',1,'type',0);
-%     prev_rt = [0 y(1:end-1)];
-%     % Inputs
-%     u = [(data{trialsToFit, 'rt'}*0.1*n_steps/range_RT)'; data{trialsToFit, 'score'}'; prev_rt];
-%     u = [zeros(size(u,1),1) u(:,1:end-1)];
-%     % Observation function
-%     g_name = @g_sceptic_continuous;
-    
+    end    
 end
-%
-% if options.inF.fit_nbasis
-%     dim = struct('n',n_basis,'n_theta',2,'n_phi',1,'p',n_steps);
-% priors.muTheta = [0 8];
-% priors.muPhi = zeros(dim.n_phi,1); % exp tranform
-% priors.muX0 = zeros(dim.n,1);
-% priors.SigmaPhi = 1e1*eye(dim.n_phi);
-% priors.SigmaTheta = 1e1*eye(dim.n_theta);
-% options.inF.priordist_theta2 = makedist('Normal',priors.muTheta(2), unique(max(priors.SigmaTheta)));
-% options.inF.maxbasis = 24;
-% options.inF.muTheta2 = priors.muTheta(2);
-% options.inF.SigmaTheta2 = unique(max(priors.SigmaTheta));
-% else
-% priors.muTheta = zeros(dim.n_theta,1);
-% priors.muPhi = zeros(dim.n_phi,1); % exp tranform
-% priors.muX0 = zeros(dim.n,1);
-% priors.SigmaPhi = 1e1*eye(dim.n_phi);
-% priors.SigmaTheta = 1e1*eye(dim.n_theta);
-
-% end
 %% skip first trial and all trials with 'wins' ie they waited
 options.skipf = zeros(1,n_t);
 options.skipf(1) = 1;
-options.skipf(logical(sum(isnan(skip_mat)))) = 1;
+%Do not use imm_quits in evolution function
+options.skipf(imm_quit) = 1;
+%options.skipf(wins) = 1;
+%options.skipf(logical(sum(isnan(skip_mat)))) = 1;
 
 %% priors
-dim.n_theta = 1;
+%dim.n_theta = 1;
+if strcmp(model,'kalman_logistic')
+    priors.muTheta = zeros(dim.n_theta,1);
+    %priors.muTheta = 0.5;
+    priors.SigmaTheta = 1e1*eye(dim.n_theta); % lower the learning rate variance -- it tends to be low in the posterior
+    priors.muPhi = zeros(dim.n_phi,1); %Beta, gamma
+    priors.SigmaPhi = 1e2*eye(dim.n_phi);
+    
+else
+    priors.muTheta = zeros(dim.n_theta,1);
+    %priors.muTheta = 0.5;
+    priors.SigmaTheta = 1e1*eye(dim.n_theta); % lower the learning rate variance -- it tends to be low in the posterior
+    priors.muPhi = [0, 0]; %Beta, gamma
+    priors.SigmaPhi = 1e2*eye(dim.n_phi);
+end
 
-
-priors.muTheta = zeros(dim.n_theta,1);
-priors.SigmaTheta = 1e1*eye(dim.n_theta); % lower the learning rate variance -- it tends to be low in the posterior
-priors.muPhi = [0, 0]; %Beta, gamma
-priors.SigmaPhi = 1e2*eye(dim.n_phi);
 options.priors = priors;
 options.inG.priors = priors; %copy priors into inG for parameter transformation (e.g., Gaussian -> uniform)
 
@@ -533,9 +351,6 @@ options.inG.priors = priors; %copy priors into inG for parameter transformation 
 %all - all trials except wins
 %qdf - all + no immediate quits
 %wdf - qdf + no waits over 19.9
-
-wins = cellfun(@(x) strcmp(x,'win'), {data.trialResult});
-imm_quit = cellfun(@(x) strcmp(x,'optSmall'), {data.initialPos}) &  [data.latency]<0.1;
 
 if strcmp(sample_to_use,'all')
     trial_index_to_remove = wins;
@@ -548,7 +363,24 @@ else
 end
 
 options.isYout = zeros(size(y));
-options.isYout(:,trial_index_to_remove) = 1;
+one_after_rt = 1;
+if one_after_rt
+    %Fill times after rt to nan
+    for k = 1:length(wins)
+        if wins(k)==1
+            rt_idx = find(y(:,k)==1);
+            try
+                options.isYout(rt_idx+1:end,k) = 1;
+            catch
+            end
+            options.isYout(rt_idx,k)=0;
+        end
+    end
+end
+
+if strcmp(sample_to_use,'qdf') || strcmp(sample_to_use,'wdf')
+    options.isYout(:,imm_quit)=1;
+end
 
 figure(500)
 subplot(1,2,1)
@@ -576,18 +408,30 @@ title(sprintf('Y of sub-sample %s',sample_to_use))
 
 %%u(:,trial_index_to_remove)=[];
 
+%IF we want to return return on policy for plotting
+plot_rop = 0;
+if plot_rop
+    options.inF.plot_rop = 1;
+    priors.muX0 = zeros(hidden_variables*n_basis+201,1);
+    priors.SigmaX0 = zeros(hidden_variables*n_basis+201); %rop then rr
+    dim.n=hidden_variables*n_basis+201;
+    options.priors = priors;
+    options.inG.priors = priors; %copy priors into inG for parameter transformation (e.g., Gaussian -> uniform)
+end
+
+
  [posterior,out] = VBA_NLStateSpaceModel(y,u,h_name,g_name,dim,options);
 
 
-if graphics==1
-    figure(2); plot(pre_trsnaformed_rtrnd,'o')
-    hold on
-    pre_trsnaformed_rtrnd(~win_or_quit_idx)=nan;
-    plot(pre_trsnaformed_rtrnd,'ro')
-    title('Red is waits Blue is quits')
-    
-    %diagnose_wtw_sceptic()
-end
+% % if graphics==1
+% %     figure(2); plot(pre_trsnaformed_rtrnd,'o')
+% %     hold on
+% %     pre_trsnaformed_rtrnd(~win_or_quit_idx)=nan;
+% %     plot(pre_trsnaformed_rtrnd,'ro')
+% %     title('Red is waits Blue is quits')
+% %     
+% %     %diagnose_wtw_sceptic()
+% % end
 
 if saveresults
 %     cd(results_dir);

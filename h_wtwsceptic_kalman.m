@@ -83,6 +83,7 @@ else
 end
 rt = u(1);
 reward = u(2);
+rt_time_bin = u(4);
 taurr = 20+rt;
 sigma_noise = inF.sigma_noise;
 fx = zeros(size(x_t));
@@ -111,6 +112,21 @@ auc=sum(elig);
 %note: this leads to a truncated gaussian update function defined on the interval of interest because AUC
 %will be 1.0 even for a partial Gaussian where part of the distribution falls outside of the interval.
 elig=elig/auc*refspread;
+
+%If r is a 'win' i.e. the subject quit and recived a 1 as reward elig is 0
+%after the rt else we have a boxcar from the peak of the elig back to 0
+ peak_elig = max(elig);
+
+if inF.use_boxcar_elig
+   if reward==1
+       elig(rt_time_bin+1:end)=0;
+       elig(1:rt_time_bin)=peak_elig;
+
+   else
+       %peak_elig = elig(rt_time_bin);
+       elig(rt_time_bin+1:end)=0;
+   end
+end
 
 %compute the intersection of the Gaussian spread function with the truncated Gaussian basis.
 %this is essentially summing the area under the curve of each truncated RBF weighted by the truncated
