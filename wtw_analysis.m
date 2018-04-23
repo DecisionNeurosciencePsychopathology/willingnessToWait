@@ -16,7 +16,7 @@ function L = wtw_analysis
 
 %model_list = {'fixed', 'fixed_decay', 'null','kalman_uv_sum', 'kalman_logistic'};
 samples_to_use = {'all', 'qdf', 'wdf'};
-model_list = {'fixed_decay'};
+model_list = {'fixed'};
 
 %% start 
 load('wtw_data.mat')
