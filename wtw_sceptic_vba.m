@@ -141,8 +141,8 @@ rew_rng_state=rng;
 %.01 bins. We'll use this as the variance of returns from typical runs for
 %the Kalman gain.
 load('policyPay_hiRes.mat')
-sigma_noise = policyPay_hiRes;
-sigma_noise = mean(sigma_noise);
+sigma_noise = std(policyPay_hiRes);
+% sigma_noise = mean(sigma_noise);
 options.inF.sigma_noise = sigma_noise;
 options.inF.gaussmat = options.inG.gaussmat;
 
@@ -173,9 +173,20 @@ switch model
         priors.muX0 = zeros(hidden_variables*n_basis+1,1);
         priors.SigmaX0 = zeros(hidden_variables*n_basis+1); % added 1 for rr
         n_phi = 2; % one for return on policy, one for choice rule
-        n_theta = 1;
-
-
+        n_theta = 2;
+        
+    case 'fixed_uv'
+        h_name = @h_wtwsceptic_kalman;
+        hidden_variables = 2; %tracks value and uncertainty
+        priors.muX0 = [zeros(n_basis,1); sigma_noise*ones(n_basis+1,1)];
+        priors.SigmaX0 = zeros(hidden_variables*n_basis+1); % added 1 for rr
+        n_phi = 3; % one for return on policy, one for choice rule
+        n_theta = 2;
+        u_aversion=0;
+        options.inF.u_aversion = u_aversion;
+        options.inG.u_aversion = u_aversion;
+        
+        
     case 'null' %no updates
         h_name = @h_wtwsceptic_null;
         hidden_variables = 1;
@@ -183,14 +194,7 @@ switch model
         n_theta = 0;
         priors.muX0 = zeros(hidden_variables*n_basis+1,1);
         priors.SigmaX0 = zeros(hidden_variables*n_basis+1); % added 1 for rr
-%     case 'fixed_opportunity_cost'
-%         h_name = @h_sceptic_fixed_opportunity_cost;
-%         hidden_variables = 2; %tracks only value
-%         priors.muX0 = zeros(hidden_variables*n_basis,1);
-%         priors.SigmaX0 = zeros(hidden_variables*n_basis);
-%         n_theta = 2;
-%         n_phi = 3- strcmp(options.inG.autocorrelation, 'none');
-% %         priors.SigmaX0 = 10*ones(hidden_variables*n_basis);
+        
     case 'fixed_decay'
         h_name = @h_wtwsceptic_fixed_decay;
         hidden_variables = 1; %tracks only value
@@ -237,8 +241,8 @@ switch model
         priors.muX0 = [zeros(n_basis,1); sigma_noise*ones(n_basis,1);zeros(1,1)];
         priors.SigmaX0 = zeros(hidden_variables*n_basis+1);
         h_name = @h_wtwsceptic_kalman;
-        n_theta = 2;
-        n_phi = 2; % one for return on policy, one for choice rule
+        n_theta = 1;
+        n_phi = 3; % beta, gamma, tau
         options.inF.u_aversion = u_aversion;
         options.inG.u_aversion = u_aversion;
     otherwise
@@ -331,16 +335,30 @@ if strcmp(model,'kalman_logistic')
     priors.muTheta = zeros(dim.n_theta,1);
     %priors.muTheta = 0.5;
     priors.SigmaTheta = 1e1*eye(dim.n_theta); % lower the learning rate variance -- it tends to be low in the posterior
-    priors.muPhi = zeros(dim.n_phi,1); %Beta, gamma
+    priors.muPhi = zeros(dim.n_phi,1); %beta, discrim, gamma
     priors.SigmaPhi = 1e2*eye(dim.n_phi);
     
 else
     priors.muTheta = zeros(dim.n_theta,1);
     %priors.muTheta = 0.5;
     priors.SigmaTheta = 1e1*eye(dim.n_theta); % lower the learning rate variance -- it tends to be low in the posterior
-    priors.muPhi = [0, 0]; %Beta, gamma
+    priors.muPhi = zeros(dim.n_phi,1); %Beta, gamma
     priors.SigmaPhi = 1e2*eye(dim.n_phi);
 end
+
+
+
+
+if tau_rr
+    %Try a small rr theta
+    priors.muTheta(end) = 10; %last arg should always be rr
+    priors.SigmaTheta(end) = 3; % lower the learning rate variance -- it tends to be low in the posterior
+    
+    
+    
+    
+end
+
 
 options.priors = priors;
 options.inG.priors = priors; %copy priors into inG for parameter transformation (e.g., Gaussian -> uniform)
@@ -418,6 +436,9 @@ if plot_rop
     options.priors = priors;
     options.inG.priors = priors; %copy priors into inG for parameter transformation (e.g., Gaussian -> uniform)
 end
+
+%Make sure rr hidden state is set to 0 for prior mux
+options.priors.muX0(end) = 0.1;
 
 
  [posterior,out] = VBA_NLStateSpaceModel(y,u,h_name,g_name,dim,options);

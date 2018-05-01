@@ -11,22 +11,45 @@ function  [ gx ] = g_wtwsceptic(x_t,phi,u,inG)
 beta = exp(phi(1));
 
 % gamma = phi(2)/10;
-gamma = 10^(phi(2) + 1);
+gamma = exp(phi(2)+1);
+tau = 1;
+% gamma=0;
 %gamma = exp(phi(2));
 
 %pull variables to set up gaussians
 gaussmat=inG.gaussmat;
 ntimesteps = inG.ntimesteps;
 nbasis = inG.nbasis;
+u = zeros(1,ntimesteps);
 
-v=x_t(1:nbasis)*ones(1,ntimesteps) .* gaussmat; %use vector outer product to replicate weight vector
+%Define value
+w = x_t(1:nbasis);
+v = w*ones(1,ntimesteps) .* gaussmat; %use vector outer product to replicate weight vector
 
-
+if inG.kalman.kalman_uv_sum || inG.kalman.fixed_uv
+   tau = .1./(1+exp(-phi(3))); %Uncertainty mixing: 0..1
+   sigma=x_t(nbasis+1:nbasis*2);
+   
+   %perform tau mixing here
+   u = sigma*ones(1,ntimesteps) .* gaussmat;
+end
+u_func = sum(u);
 v_func = sum(v); %subjective value by timestep as a sum of all basis functions
 
 % add cumsum
 v_func = cumsum(v_func);
- 
+
+%Scale v_func down to the max of the basis
+v_func = v_func./max(v_func)*max(w);
+
+%If we are dividing by 0
+if isnan(v_func)
+    v_func = zeros(1,ntimesteps);
+end
+
+%Update with uncertainty if appliciable
+v_func = tau .* v_func + (1-tau).*u_func;
+
 
 % add opportunity cost = rr*trial length (max 200)
 opp_cost = x_t(end).*(1:ntimesteps);

@@ -2,7 +2,7 @@
 function L = wtw_analysis
 
 %% default variables
-    n_basis = 16;
+    n_basis = 8;
     multinomial = 1;
     multisession = 0;
     fixed_params_across_runs = 0;
@@ -14,7 +14,7 @@ function L = wtw_analysis
 
 %models
 
-%model_list = {'fixed', 'fixed_decay', 'null','kalman_uv_sum', 'kalman_logistic'};
+%model_list = {'fixed', 'fixed_decay', 'null','kalman_uv_sum', 'kalman_logistic', 'fixed_uv'};
 samples_to_use = {'all', 'qdf', 'wdf'};
 model_list = {'fixed'};
 
@@ -36,9 +36,9 @@ L_id = zeros(1,length(ids));
 
 %Override ids so it is only a good subject
 %ids=214710;
-ids = 216174;
+ids = 214229;
 
-for h = 0%:1 %Tau_rr or no
+for h = 1%:1 %Tau_rr or no
     tau_rr = h;
     
     disp('Tau_RR = ')

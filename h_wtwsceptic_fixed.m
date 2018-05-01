@@ -16,7 +16,8 @@ alpha = 1./(1+exp(-theta(1)));
 
 % alpha2 = 1./(1+exp(-theta(2)));
 
-alpha2 = alpha;
+%alpha2 = alpha;
+alpha2 = 1./exp(theta(2));
 
 
 if inF.fit_propspread
