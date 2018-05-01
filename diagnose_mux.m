@@ -1,0 +1,90 @@
+%For diagnosis purposes only
+gamma = exp(post.muPhi(2)+1);
+fx=out.suffStat.muX;
+
+for i=1:out.dim.n_t
+    
+gaussmat = out.options.inF.gaussmat;
+ntimesteps = out.options.inF.ntimesteps;
+nbasis = out.options.inF.nbasis;
+
+v=fx(1:nbasis,i)*ones(1,ntimesteps) .* gaussmat; %use vector outer product to replicate weight vector
+
+
+v_func = sum(v); %subjective value by timestep as a sum of all basis functions
+
+% add cumsum
+v_func = cumsum(v_func);
+ 
+
+% add opportunity cost = rr*trial length (max 200)
+opp_cost(i,:) = fx(end,i).*(1:ntimesteps);
+
+cumulative_reward_fx(i,:) = v_func;
+
+return_on_policy(:,i) = cumulative_reward_fx(i,:)-(gamma*opp_cost(i,:));
+end
+
+%Define the wins
+rtrnd = round([data.latency]'*10);
+win_data = nan(out.dim.n_t,1);
+win_data(out.options.inF.wins) = rtrnd(out.options.inF.wins);
+
+%Define the plot data for the y input
+plot_y_data = nan(out.dim.n_t,1);
+
+%Find where the y was actually being used 
+[y_data,idx]=find(out.y==1);
+plot_y_data(idx) = y_data;
+
+%Remove the immediate quits
+plot_y_data(logical(out.options.skipf))=nan;
+
+figure(999)
+%Value - MUX
+subplot(5,1,1)
+%surf(out.suffStat.muX(1:nbasis,:))
+imagesc(out.suffStat.muX(1:nbasis,:))
+title('nbasis functions')
+hold on
+plot(1:out.dim.n_t,plot_y_data*nbasis/200,'r*')
+plot(1:out.dim.n_t,win_data*nbasis/200,'b*')
+colorbar
+
+%RR - reward rate
+subplot(5,1,2)
+plot(out.suffStat.muX(end,:),'Linewidth',3)
+colorbar
+title('Reward Rate')
+
+%Cumulative reward funciton
+subplot(5,1,3)
+imagesc(cumulative_reward_fx')
+colorbar
+title('cumulative reward fx ')
+
+%Opportunity cost
+subplot(5,1,4)
+%[data,idx]=find(out.options.skipf~=1);
+imagesc(opp_cost')
+colorbar
+title(sprintf('Opportunity cost with gamma: %.2f', gamma))
+
+%Rop - return on policy
+subplot(5,1,5)
+%[data,idx]=find(out.options.skipf~=1);
+imagesc(return_on_policy)
+title('Return on policy')
+colormap bone
+colorbar
+hold on
+plot(1:out.dim.n_t,plot_y_data,'r*')
+
+
+
+
+
+
+
+
+
