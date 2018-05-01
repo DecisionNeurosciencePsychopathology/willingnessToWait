@@ -10,7 +10,14 @@ function  [ gx ] = g_wtwsceptic_logistic(x_t,P,u,inG)
 beta = exp(P(1));
 %Need to add discrim as an additional param
 discrim = 1./(1+exp(-P(2)));
-gamma = P(3)/10;
+
+gamma = exp(P(3));
+% gamma=0;
+%gamma = exp(phi(2));
+
+iti = 20; 
+opp_cost_scaling = 1/iti;
+
 
 gaussmat=inG.gaussmat;
 ntimesteps = inG.ntimesteps;
@@ -24,7 +31,7 @@ u_func = cumsum(sum(u)); %vecotr of uncertainty by timestep
 
 opp_cost = x_t(end).*(1:ntimesteps);
 cumulative_reward = v_func;
-return_on_policy = cumulative_reward-(gamma*opp_cost);
+return_on_policy = cumulative_reward-(gamma*opp_cost_scaling*opp_cost);
 
 %In order to run the multinomial version we still need to compute the
 %softmax for both the rt_explore and rt_exploit, then let the sigmoid chose

@@ -26,7 +26,7 @@ hidden_state_index = reshape(hidden_state_index,nbasis,inF.hidden_state);
 
 %Set the proper paramters NOTE gamma is first then phi for sigma volatility
 %model.
-if inF.kalman.kalman_uv_logistic, tradeoff = 1./(1+exp(-theta(1))); end
+% if inF.kalman.kalman_uv_logistic, tradeoff = 1./(1+exp(-theta(1))); end
 if inF.kalman.fixed_uv, alpha = 1./(1+exp(-theta(1))); end 
 
 %% allow uncertainty aversion in UV_sum?
@@ -162,7 +162,7 @@ else
 end
 
 %N.B - this is dangerous please double check that all parameters 
-alpha2 = 1./(1+exp(-theta(end)));
+alpha2 = .1./(1+exp(-theta(end)));
 
 %add in reward rate as hidden state
 if inF.tau_rr 

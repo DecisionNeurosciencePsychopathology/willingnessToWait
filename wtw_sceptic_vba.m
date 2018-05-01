@@ -125,6 +125,7 @@ options.inF.kalman.kalman_uv_logistic = 0;
 options.inF.kalman.kalman_uv_sum = 0;
 options.inF.kalman.kalman_uv_sum_sig_vol = 0;
 options.inF.kalman.fixed_uv = 0;
+options.inF.kalman.fixed_decay_uv = 0;
 options.inF.kalman.kalman_sigmavolatility_local =0;
 options.inF.kalman.kalman_sigmavolatility_precision=0;
 
@@ -200,10 +201,17 @@ switch model
         hidden_variables = 1; %tracks only value
         priors.muX0 = zeros(hidden_variables*n_basis+1,1);
         priors.SigmaX0 = zeros(hidden_variables*n_basis+1);
-        n_theta = 2; %learning rate and decay outside of the eligibility trace
+        n_theta = 3; %learning rate and decay outside of the eligibility trace
         n_phi = 2; % one for return on policy, one for choice rule
 
-        
+    case 'fixed_decay_uv'
+        h_name = @h_wtwsceptic_fixed_decay;
+        hidden_variables = 1; %tracks only value
+        priors.muX0 = zeros(hidden_variables*n_basis+1,1);
+        priors.SigmaX0 = zeros(hidden_variables*n_basis+1);
+        n_theta = 3; %learning rate and decay outside of the eligibility trace
+        n_phi = 3; % one for return on policy, one for choice rule
+    
         %kalman learning rule (no free parameter); softmax choice over value curve
     case 'kalman_softmax'
         %Prop_spread is the only variable in this model
@@ -222,7 +230,7 @@ switch model
             n_theta = 0;
         end
         n_phi  = 3;  %Beta and discrim and gamma (for return on policy)
-        n_theta = 2;
+        n_theta = 1;
         %Different observation function than other kalman models
 %         g_name = @g_sceptic_logistic;
         hidden_variables = 2; %tracks value and uncertainty
@@ -349,15 +357,15 @@ end
 
 
 
-if tau_rr
-    %Try a small rr theta
-    priors.muTheta(end) = 10; %last arg should always be rr
-    priors.SigmaTheta(end) = 3; % lower the learning rate variance -- it tends to be low in the posterior
-    
-    
-    
-    
-end
+% if tau_rr
+%     %Try a small rr theta
+%     priors.muTheta(end) = 10; %last arg should always be rr
+%     priors.SigmaTheta(end) = 3; % lower the learning rate variance -- it tends to be low in the posterior
+%     
+%     
+%     
+%     
+% end
 
 
 options.priors = priors;

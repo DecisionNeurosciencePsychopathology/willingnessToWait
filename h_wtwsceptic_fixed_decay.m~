@@ -17,7 +17,7 @@ gamma = 1./(1+exp(-theta(2))); %Decay: 0..1
 
 % alpha2 = 1./(1+exp(-theta(2)));
 
-alpha2 = 1./(1+exp(-theta(3)));
+alpha2 = 1./(1+exp(-theta(1)));
 
 
 if inF.fit_propspread

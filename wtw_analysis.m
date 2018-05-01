@@ -14,9 +14,9 @@ function L = wtw_analysis
 
 %models
 
-%model_list = {'fixed', 'fixed_decay', 'null','kalman_uv_sum', 'kalman_logistic', 'fixed_uv'};
+%model_list = {'fixed', 'fixed_decay', 'null','kalman_uv_sum', 'kalman_logistic', 'fixed_uv', 'fixed_decay_uv'};
 samples_to_use = {'all', 'qdf', 'wdf'};
-model_list = {'fixed'};
+model_list = {'kalman_logistic'};
 
 %% start 
 load('wtw_data.mat')
@@ -35,14 +35,12 @@ L = zeros((length(model_list)*2),(length(ids)));
 L_id = zeros(1,length(ids));
 
 %Override ids so it is only a good subject
-%ids=214710;
-ids = 214229;
+ids=214710;
+% ids = 214229;
 
-for h = 1%:1 %Tau_rr or no
-    tau_rr = h;
-    
-    disp('Tau_RR = ')
-    disp(h)
+% Whether to use the Constantino & Daw reward rate update
+for tau_rr = 0%:1 %Tau_rr or no
+%         disp('Tau_RR = ')
     
     for k = 1:length(model_list)
         model = char(model_list(k));
