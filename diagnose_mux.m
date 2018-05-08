@@ -19,7 +19,7 @@ v=fx(1:nbasis,i)*ones(1,ntimesteps) .* gaussmat; %use vector outer product to re
 w = fx(1:nbasis,i);
 u = zeros(1,ntimesteps);
 if out.options.inG.kalman.kalman_uv_sum || out.options.inG.kalman.fixed_uv
-   tau = .1./(1+exp(-post.muPhi(3))); %Uncertainty mixing: 0..1
+   tau = 1./(1+exp(-post.muPhi(3)-10)); %Uncertainty mixing: 0..1
    sigma=fx(nbasis+1:nbasis*2,i);
    
    %perform tau mixing here
@@ -39,8 +39,6 @@ if isnan(v_func)
     v_func = zeros(1,ntimesteps);
 end
 
-%Update with uncertainty if appliciable
-v_func = tau .* v_func + (1-tau).*u_func;
 
 
 % add opportunity cost = rr*trial length (max 200)
@@ -49,6 +47,10 @@ opp_cost(i,:) = fx(end,i).*(1:ntimesteps);
 cumulative_reward_fx(i,:) = v_func;
 
 return_on_policy(:,i) = cumulative_reward_fx(i,:)-(gamma*opp_cost_scaling*opp_cost(i,:));
+
+%Update with uncertainty if appliciable
+return_on_policy(:,i) = tau .* return_on_policy(:,i) + (1-tau).*u_func;
+
 end
 
 %Define the wins

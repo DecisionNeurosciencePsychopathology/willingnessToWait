@@ -1,7 +1,10 @@
 function  [fx] = h_wtwsceptic_fixed(x_t, theta, u, inF)
-% evolution function of fixed-LR SCEPTIC model for WTW
+% evolution function of q-values of a RL agent (2-armed bandit problem)
+% [fx,dfdx,dfdP] = f_Qlearn2(x,P,u,in)
+% Here, there are only two q-values to evolve, i.e. there are only two
+% actions to reinforce (2-armed bandit problem).
 % IN:
-%   - x_t : basis weights (nbasis x 1)
+%   - x_t : basis values/heights (nbasis x 1)
 %   - theta : theta(1) = prop_spread; theta(2) = alpha;
 %   - u : u(1) = rt; u(2) = reward
 %   - inF : struct of input options (has nbasis and ntimesteps)
@@ -59,7 +62,7 @@ auc=sum(elig);
 %will be 1.0 even for a partial Gaussian where part of the distribution falls outside of the interval.
 elig=elig/auc*refspread;
 
-%If r is a 'win' i.e. the subject quit and received a 1 as reward elig is 0
+%If r is a 'win' i.e. the subject quit and recived a 1 as reward elig is 0
 %after the rt else we have a boxcar from the peak of the elig back to 0
  peak_elig = max(elig);
 
@@ -75,11 +78,23 @@ if inF.use_boxcar_elig
 end
 
 
+if inF.use_delta_elig
+       elig(1:ntimesteps
+       elig(rt_time_bin)=peak_elig;
+       elig(~rt_time_bin)=peak_elig;
+
+   else
+       %peak_elig = elig(rt_time_bin);
+       elig(rt_time_bin+1:end)=0;
+   end
+end
+
+
 %If we want to replace the elig trace with a dirac impulse function
-%this may be needed for WTW
+%I don't think this is correct
 if inF.use_dirac
     elig = zeros(size(elig));
-    elig(rt_time_bin)=peak_elig;
+    elig(rt_time_bin)=reward;
 end
 
 

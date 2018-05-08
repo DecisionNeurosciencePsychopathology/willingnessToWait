@@ -87,7 +87,7 @@ end
 
 %Options changing the mechanics of the model evolution function
 options.inF.tau_rr = tau_rr; %RossOtto Reward Rate
-options.inF.use_boxcar_elig = 1; %If we want to use the boxcar idea to update the eligibility traces
+options.inF.use_boxcar_elig = 0; %If we want to use the boxcar idea to update the eligibility traces
 options.inF.use_dirac = 0; %Use the dirac impulse fuciton (will overwrite the boxcar method)
 
 
@@ -181,8 +181,8 @@ switch model
         hidden_variables = 2; %tracks value and uncertainty
         priors.muX0 = [zeros(n_basis,1); sigma_noise*ones(n_basis+1,1)];
         priors.SigmaX0 = zeros(hidden_variables*n_basis+1); % added 1 for rr
-        n_phi = 3; % one for return on policy, one for choice rule
-        n_theta = 2;
+        n_phi = 3; % temp, opporunity cost sensitivity, uncertainty sensitivity
+        n_theta = 2; % learning rate, opportunity cost learning rate
         u_aversion=0;
         options.inF.u_aversion = u_aversion;
         options.inG.u_aversion = u_aversion;
@@ -201,16 +201,16 @@ switch model
         hidden_variables = 1; %tracks only value
         priors.muX0 = zeros(hidden_variables*n_basis+1,1);
         priors.SigmaX0 = zeros(hidden_variables*n_basis+1);
-        n_theta = 3; %learning rate and decay outside of the eligibility trace
-        n_phi = 2; % one for return on policy, one for choice rule
+        n_theta = 3; %learning rate (LR), decay, opportunity cost LR
+        n_phi = 2; % temp, opportunity cost sensitivity
 
     case 'fixed_decay_uv'
-        h_name = @h_wtwsceptic_fixed_decay;
-        hidden_variables = 1; %tracks only value
+        h_name = @h_wtwsceptic_kalman;
+        hidden_variables = 2; %tracks only value
         priors.muX0 = zeros(hidden_variables*n_basis+1,1);
         priors.SigmaX0 = zeros(hidden_variables*n_basis+1);
-        n_theta = 3; %learning rate and decay outside of the eligibility trace
-        n_phi = 3; % one for return on policy, one for choice rule
+        n_theta = 3; %basis learning rate, decay, reward learning rate
+        n_phi = 3; % temperature, opportunity cost sensitivity, uncertainty sensitivity, 
     
         %kalman learning rule (no free parameter); softmax choice over value curve
     case 'kalman_softmax'
@@ -338,7 +338,7 @@ options.skipf(imm_quit) = 1;
 %options.skipf(logical(sum(isnan(skip_mat)))) = 1;
 
 %% priors
-%dim.n_theta = 1;
+
 if strcmp(model,'kalman_logistic')
     priors.muTheta = zeros(dim.n_theta,1);
     %priors.muTheta = 0.5;
@@ -348,6 +348,10 @@ if strcmp(model,'kalman_logistic')
     
 else
     priors.muTheta = zeros(dim.n_theta,1);
+    if dim.n_theta >1
+    priors.muTheta(1) = -3; % lower LR
+    priors.muTheta(2) = -3; % lower reward rate LR
+    end
     %priors.muTheta = 0.5;
     priors.SigmaTheta = 1e1*eye(dim.n_theta); % lower the learning rate variance -- it tends to be low in the posterior
     priors.muPhi = zeros(dim.n_phi,1); %Beta, gamma
@@ -408,20 +412,20 @@ if strcmp(sample_to_use,'qdf') || strcmp(sample_to_use,'wdf')
     options.isYout(:,imm_quit)=1;
 end
 
-figure(500)
-subplot(1,2,1)
-[time_bin,~]=find(y==1);
-plot(time_bin, 'bo','LineWidth',3,'MarkerSize',10)
-axis([0,length(time_bin),0,max(time_bin)])
-title('Y Original')
-subplot(1,2,2)
-tmp_idx = sum(options.isYout)~=200;
-surviving_data_points=time_bin;
-surviving_data_points(~tmp_idx)=nan;
-% [surviving_data_points,~]=find(y(:,tmp_idx)==1);
-plot(surviving_data_points, 'ro','LineWidth',3,'MarkerSize',10)
-axis([0,length(time_bin),0,max(time_bin)])
-title(sprintf('Y of sub-sample %s',sample_to_use))
+% figure(500)
+% subplot(1,2,1)
+% [time_bin,~]=find(y==1);
+% plot(time_bin, 'bo','LineWidth',3,'MarkerSize',10)
+% axis([0,length(time_bin),0,max(time_bin)])
+% title('Y Original')
+% subplot(1,2,2)
+% tmp_idx = sum(options.isYout)~=200;
+% surviving_data_points=time_bin;
+% surviving_data_points(~tmp_idx)=nan;
+% % [surviving_data_points,~]=find(y(:,tmp_idx)==1);
+% plot(surviving_data_points, 'ro','LineWidth',3,'MarkerSize',10)
+% axis([0,length(time_bin),0,max(time_bin)])
+% title(sprintf('Y of sub-sample %s',sample_to_use))
 
 % options.priors.iQy = cell(1, length(u));
 % for jj = 1 : length(trial_index_to_remove)

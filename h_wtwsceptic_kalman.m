@@ -27,7 +27,7 @@ hidden_state_index = reshape(hidden_state_index,nbasis,inF.hidden_state);
 %Set the proper paramters NOTE gamma is first then phi for sigma volatility
 %model.
 % if inF.kalman.kalman_uv_logistic, tradeoff = 1./(1+exp(-theta(1))); end
-if inF.kalman.fixed_uv, alpha = 1./(1+exp(-theta(1))); end 
+if inF.kalman.fixed_uv || inF.kalman.fixed_decay_uv , alpha = 1./(1+exp(-theta(1))); end
 
 %% allow uncertainty aversion in UV_sum?
 
@@ -82,17 +82,17 @@ elig=elig/auc*refspread;
 
 %If r is a 'win' i.e. the subject quit and recived a 1 as reward elig is 0
 %after the rt else we have a boxcar from the peak of the elig back to 0
- peak_elig = max(elig);
+peak_elig = max(elig);
 
 if inF.use_boxcar_elig
-   if reward==1
-       elig(rt_time_bin+1:end)=0;
-       elig(1:rt_time_bin)=peak_elig;
-
-   else
-       %peak_elig = elig(rt_time_bin);
-       elig(rt_time_bin+1:end)=0;
-   end
+    if reward==1
+        elig(rt_time_bin+1:end)=0;
+        elig(1:rt_time_bin)=peak_elig;
+        
+    else
+        %peak_elig = elig(rt_time_bin);
+        elig(rt_time_bin+1:end)=0;
+    end
 end
 
 %compute the intersection of the Gaussian spread function with the truncated Gaussian basis.
@@ -101,10 +101,10 @@ end
 e = sum(repmat(elig,nbasis,1).*inF.gaussmat_trunc, 2);
 
 %e for uncertainty
-    cume = e;
-    max_idx = find(max(cume) == cume);
-    cume(1:max_idx(end)) = max(cume);
-    %e = cume;
+cume = e;
+max_idx = find(max(cume) == cume);
+cume(1:max_idx(end)) = max(cume);
+%e = cume;
 
 %1) compute prediction error, scaled by eligibility trace
 delta = e.*(reward - mu);
@@ -147,13 +147,22 @@ if inF.kalman.kalman_uv_sum
     %Update the value
     mu = mu + k.*delta;
     %fx(hidden_state_index(:,1))=tau.*mu + (1-tau).*sigma; %mix together value and uncertainty according to tau
-    fx(hidden_state_index(:,1))=mu; %mix together value and uncertainty according to tau
+    fx(hidden_state_index(:,1))=mu; %write values as first set of hidden states
     
 elseif inF.kalman.fixed_uv
     %Track sigma use fixed value update, so we'll need alpha in the mix
     mu = mu + alpha.*delta;
     %fx(hidden_state_index(:,1))=tau.*mu + (1-tau).*sigma; %mix together value and uncertainty according to tau
+    fx(hidden_state_index(:,1))=mu; %write values as first set of hidden states
+    
+elseif inF.kalman.fixed_decay_uv
+    %% introduce decay
+    omega = 1./(1+exp(-theta(2))); %Decay: 0..1
+    decay = -omega.*(1-e).*mu;
+    mu = mu + alpha.*delta + decay;
     fx(hidden_state_index(:,1))=mu; %mix together value and uncertainty according to tau
+    
+    
     
 else
     % What our final for kalman will be is x_t + k_ij * delta so we need to
@@ -161,13 +170,14 @@ else
     fx(hidden_state_index(:,1)) = mu + k.*delta;
 end
 
-%N.B - this is dangerous please double check that all parameters 
+%N.B - this is dangerous please double check that all parameters are used
+%appropriately
 alpha2 = .1./(1+exp(-theta(end)));
 
 %add in reward rate as hidden state
-if inF.tau_rr 
+if inF.tau_rr
     fx(end) = ((1-alpha2).^taurr)*x_t(end)+(1-(1-alpha2).^taurr)*(reward/taurr);
-else 
+else
     fx(end) = x_t(end) + alpha2*(reward/rt - x_t(end));
 end
 

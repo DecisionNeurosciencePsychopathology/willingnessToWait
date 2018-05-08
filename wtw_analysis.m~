@@ -1,8 +1,6 @@
 
 function L = wtw_analysis
 
-%% top-level wrapper for SCEPTIC modeling of individual WTW data
-
 %% default variables
     n_basis = 8;
     multinomial = 1;
@@ -16,7 +14,7 @@ function L = wtw_analysis
 
 %models
 
-modelnames = {'null','fixed', 'fixed_decay', 'kalman_uv_sum', 'kalman_logistic', 'fixed_uv', 'fixed_decay_uv'};
+model_list = {'fixed', 'fixed_decay', 'kalman_uv_sum', 'kalman_logistic', 'fixed_uv', 'fixed_decay_uv'};
 samples_to_use = {'all', 'qdf', 'wdf'};
 % model_list = {'fixed_decay_uv'};
 
@@ -33,7 +31,7 @@ for j = 1:length(wtw_struct)
 end
 
 %initialize
-L = zeros((length(modelnames)*2),(length(ids)));
+L = zeros((length(model_list)*2),(length(ids)));
 L_id = zeros(1,length(ids));
 
 %Override ids so it is only a good subject
@@ -44,8 +42,8 @@ L_id = zeros(1,length(ids));
 for tau_rr = 0%:1 
 %         disp('Tau_RR = ')
     
-    for k = 1:length(modelnames)
-        model = char(modelnames(k));
+    for k = 1:length(model_list)
+        model = char(model_list(k));
         disp('Model: ')
         disp(model)
         
@@ -83,6 +81,6 @@ for tau_rr = 0%:1
 end
 
 
-save(sprintf('all_outF_%s', date),'L', 'modelnames');
+save(sprintf('all_outF_%s', date),'L');
 
 end

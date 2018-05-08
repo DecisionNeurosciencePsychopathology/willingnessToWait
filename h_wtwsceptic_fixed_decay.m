@@ -12,12 +12,12 @@ function  [fx] = h_wtwsceptic_fixed_decay(x_t, theta, u, inF)
 %   - fx: evolved basis values/heights (nbasis x 1)
 
 alpha = 1./(1+exp(-theta(1)));
-gamma = 1./(1+exp(-theta(2))); %Decay: 0..1
 %alpha = sig(theta(1));
 
 % alpha2 = 1./(1+exp(-theta(2)));
 
-alpha2 = 1./(1+exp(-theta(3)));
+alpha2 = 1./(1+exp(-theta(2)));
+gamma = 1./(1+exp(-theta(3))); %Decay: 0..1
 
 
 if inF.fit_propspread

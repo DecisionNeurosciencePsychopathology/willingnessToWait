@@ -7,11 +7,13 @@ function  [ gx ] = g_wtwsceptic(x_t,phi,u,inG)
 % OUTPUT
 % - gx : p(chosen|x_t) or RT
 
-%temperature value
+%temperature (not inverse!)
 beta = exp(phi(1));
 
-% gamma = phi(2)/10;
+% opportunity cost sensitivity
 gamma = exp(phi(2));
+
+% uncertainty sensitivity first fixed at neutrality
 tau = 1;
 % gamma=0;
 %gamma = exp(phi(2));
@@ -30,13 +32,18 @@ v = w*ones(1,ntimesteps) .* gaussmat; %use vector outer product to replicate wei
 
 if inG.kalman.kalman_uv_sum || inG.kalman.fixed_uv || inG.kalman.fixed_decay_uv
 %    tau = 1./(1+exp(-phi(3))); %Uncertainty mixing: 0..1
-tau = 1 + phi(3)/100;
+% uncertainty sensitivity
+% tau = 1 + phi(3)/1000;
+tau = 1./(1+exp(-phi(3)-10)); 
+
 sigma=x_t(nbasis+1:nbasis*2);
    
    %perform tau mixing here
    u = sigma*ones(1,ntimesteps) .* gaussmat;
 end
 u_func = sum(u);
+
+
 v_func = sum(v); %subjective value by timestep as a sum of all basis functions
 
 % add cumsum
@@ -50,16 +57,23 @@ if isnan(v_func)
     v_func = zeros(1,ntimesteps);
 end
 
-%Update with uncertainty if appliciable
-v_func = tau .* v_func + (1-tau).*u_func;
-
-
-% add opportunity cost = rr*trial length (max 200)
-opp_cost = x_t(end).*(1:ntimesteps);
-
 cumulative_reward_fx = v_func;
 
+
+
+% incorporate opportunity cost = rr*trial length (max 200)
+opp_cost = x_t(end).*(1:ntimesteps);
+
 return_on_policy = cumulative_reward_fx-(gamma.*opp_cost.*opp_cost_scaling);
+
+% uncertainty-seeking only matters past the value bump -- nothing is
+% learned by quitting earlier
+u_func(1:return_on_policy==max(return_on_policy)) = 0;
+
+%Update with uncertainty if appliciable
+return_on_policy = tau .* return_on_policy + (1-tau).*u_func;
+
+
 
 
 %choice rule
